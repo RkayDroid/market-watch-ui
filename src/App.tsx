@@ -6,6 +6,7 @@ import PastPerformanceSection from './components/PastPerformanceSection.tsx';
 import LoadingIndicator from './components/LoadingIndicator.tsx';
 import ErrorBanner from './components/ErrorBanner.tsx';
 import { useStockLookup, type UseStockLookupOptions } from './hooks/useStockLookup.ts';
+import { usePerformanceLookup } from './hooks/usePerformanceLookup.ts';
 import { createDefaultLocalStockProvider } from './data/providers/LocalStockProvider.ts';
 import { createLiveApiStockProvider } from './data/providers/LiveApiStockProvider.ts';
 import { getLiveApiConfig } from './config/liveApiConfig.ts';
@@ -29,20 +30,37 @@ function createDefaultStockService(): StockService {
 
 export default function App({ service, lookupOptions }: AppProps) {
   const stockService = useMemo(() => service ?? createDefaultStockService(), [service]);
-  const { data, loading, pendingSymbol, error, lookup } = useStockLookup(stockService, lookupOptions);
+  const { data, source: loadedSource, loading, pendingSymbol, error, lookup } = useStockLookup(
+    stockService,
+    lookupOptions,
+  );
+  const { fetch: fetchPerf, reset: resetPerf, ...performance } = usePerformanceLookup(stockService, lookupOptions);
 
   const [symbol, setSymbol] = useState('');
   const [source, setSource] = useState<DataSource>('api');
   /** Kept across lookups so a chosen window survives searching another symbol. */
   const [period, setPeriod] = useState<PerformancePeriod>(DEFAULT_PERFORMANCE_PERIOD);
 
+  /** A new symbol lookup invalidates any past-performance results shown for the previous one. */
+  const startLookup = useCallback(
+    (nextSymbol: string, nextSource: DataSource) => {
+      resetPerf();
+      void lookup(nextSymbol, nextSource);
+    },
+    [lookup, resetPerf],
+  );
+
   const pickSuggestedSymbol = useCallback(
     (suggested: string) => {
       setSymbol(suggested);
-      void lookup(suggested, source);
+      startLookup(suggested, source);
     },
-    [lookup, source],
+    [startLookup, source],
   );
+
+  const fetchPerformance = useCallback(() => {
+    if (data && loadedSource) void fetchPerf(data.symbol, period, loadedSource);
+  }, [data, loadedSource, period, fetchPerf]);
 
   return (
     <Container maxWidth={false} sx={{ py: 2, px: { xs: 2, md: 3 } }}>
@@ -56,7 +74,7 @@ export default function App({ service, lookupOptions }: AppProps) {
         loading={loading}
         onSymbolChange={setSymbol}
         onSourceChange={setSource}
-        onSubmit={lookup}
+        onSubmit={startLookup}
       />
 
       {error && <ErrorBanner error={error} onPickSymbol={pickSuggestedSymbol} />}
@@ -68,9 +86,13 @@ export default function App({ service, lookupOptions }: AppProps) {
           <StockDetailCards details={data.details} />
           <PastPerformanceSection
             details={data.details}
-            history={data.history}
             period={period}
             onPeriodChange={setPeriod}
+            onFetch={fetchPerformance}
+            performance={performance.data}
+            loading={performance.loading}
+            pendingPeriod={performance.pendingPeriod}
+            error={performance.error}
           />
         </Box>
       )}

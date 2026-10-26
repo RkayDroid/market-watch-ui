@@ -7,9 +7,9 @@ describe('HourlyPriceTable', () => {
     render(
       <HourlyPriceTable
         history={[
-          { hour: '03:00 PM', price: 10, trend: 'neutral' },
-          { hour: '04:00 PM', price: 12.5, trend: 'up' },
-          { hour: '05:00 PM', price: 11, trend: 'down' },
+          { label: '03:00 PM', price: 10, trend: 'neutral' },
+          { label: '04:00 PM', price: 12.5, trend: 'up' },
+          { label: '05:00 PM', price: 11, trend: 'down' },
         ]}
       />,
     );

@@ -4,25 +4,31 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from './App.tsx';
 import { createLiveApiStockProvider, type HttpClient } from './data/providers/LiveApiStockProvider.ts';
-import { createLocalStockProvider, type DetailsLoader } from './data/providers/LocalStockProvider.ts';
+import { createLocalStockProvider, type JsonLoader } from './data/providers/LocalStockProvider.ts';
 import type { StockProvider } from './data/providers/StockProvider.ts';
 import { createStockService } from './services/stockService.ts';
-/** A captured live response, served by the fake live API below. */
-import detailAapl from '../json/detail-AAPL.json';
 
-/** The offline detail fixtures (copies of the captured live responses), bundled instead of fetched. */
-const LOCAL_DETAILS = import.meta.glob<unknown>('../public/data/detail-*.json', { eager: true, import: 'default' });
+/** The offline fixtures (copies of the captured live responses), bundled instead of fetched. */
+const FIXTURES = import.meta.glob<unknown>('../public/data/*.json', { eager: true, import: 'default' });
+const fixture = (name: string): unknown => FIXTURES[`../public/data/${name}`] ?? null;
 
-/** Fake HTTP client standing in for the live API: knows AAPL, 404s everything else. */
+/** Resolves `public/data/{path}` from the bundled fixtures. */
+const loadLocalJson: JsonLoader = async (path) => fixture(path.replace(/^data\//, ''));
+
+/**
+ * Fake HTTP client standing in for the live API: serves AAPL from the captured responses
+ * (details, historic and high/low for every period) and 404s everything else.
+ */
+const liveRequests: string[] = [];
 const fakeHttp: HttpClient = {
   get: async (url) => {
-    if (url.endsWith('/stock/AAPL')) return { data: detailAapl };
+    liveRequests.push(url);
+    const m = /\/stock\/AAPL(?:\/(historic|highlow)\?period=([A-Z_]+))?$/.exec(url);
+    const data = m ? fixture(m[1] ? `${m[1]}-AAPL-${m[2]}.json` : 'detail-AAPL.json') : null;
+    if (data) return { data };
     throw new AxiosError('not found', undefined, undefined, undefined, { status: 404 } as AxiosResponse);
   },
 };
-
-/** Resolves `public/data/detail-{SYMBOL}.json` from the bundled fixtures. */
-const loadLocalDetails: DetailsLoader = async (symbol) => LOCAL_DETAILS[`../public/data/detail-${symbol}.json`] ?? null;
 
 const EXPECTED_AAPL_TILES = [
   'SymbolAAPL',
@@ -35,7 +41,7 @@ const EXPECTED_AAPL_TILES = [
   'Languageen-USAmerican English',
 ];
 
-function buildService(local: StockProvider = createLocalStockProvider(loadLocalDetails)) {
+function buildService(local: StockProvider = createLocalStockProvider(loadLocalJson)) {
   return createStockService(
     {
       local,
@@ -54,6 +60,8 @@ async function lookup(symbol: string, source: 'api' | 'local') {
 
 const periodRadio = (label: string | RegExp) =>
   within(screen.getByTestId('period-selector')).getByRole('radio', { name: label });
+
+const fetchButton = () => screen.getByRole('button', { name: /fetch/i });
 
 describe('App', () => {
   it('renders the detail tiles from GET /stock/{symbol} for the live API source', async () => {
@@ -75,7 +83,7 @@ describe('App', () => {
     expect(Array.from(grid.children).map((tile) => tile.textContent)).toEqual(EXPECTED_AAPL_TILES);
   });
 
-  it('shows a "Past Performance" section beneath the tiles with an unpopulated chart and table', async () => {
+  it('shows a "Past Performance" section beneath the tiles, unpopulated until Fetch is clicked', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('META', 'local');
     await screen.findByTestId('summary-symbol');
@@ -84,11 +92,122 @@ describe('App', () => {
     const tiles = screen.getByTestId('detail-tiles');
     expect(tiles.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // No source provides history yet: the chart and table are present but empty.
+    expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
     expect(within(section).getByTestId('price-chart-empty')).toBeInTheDocument();
-    expect(within(section).queryByTestId('price-chart')).not.toBeInTheDocument();
     expect(within(section).getAllByRole('row')).toHaveLength(1); // header only
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+  });
+
+  it('Fetch calls historic and highlow for the selected period and populates tiles, chart and table (live API)', async () => {
+    liveRequests.length = 0;
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'api');
+    await screen.findByTestId('summary-symbol');
+
+    await userEvent.click(periodRadio('Week'));
+    await userEvent.click(fetchButton());
+
+    expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
+    expect(liveRequests.slice(1).sort()).toEqual([
+      'https://api.test/v1/stock/AAPL/highlow?period=WEEK',
+      'https://api.test/v1/stock/AAPL/historic?period=WEEK',
+    ]);
+
+    // Tiles: latest price + change over the week (history-AAPL-WEEK), high/low (highlow-AAPL-WEEK).
+    expect(screen.getByTestId('summary-price')).toHaveTextContent('$347.73');
+    expect(screen.getByTestId('summary-change')).toHaveTextContent('1.4%'); // 342.94 → 347.73
+    expect(screen.getByTestId('summary-high')).toHaveTextContent('$351.73');
+    expect(screen.getByTestId('summary-low')).toHaveTextContent('$338.70');
+
+    // Chart and table: one point per sample of the 5-day series.
+    const chart = screen.getByTestId('price-chart');
+    expect(chart).toHaveAttribute('data-direction', 'up');
+    expect(within(chart).getAllByTestId('price-point')).toHaveLength(5);
+    expect(screen.getByText('Price Trend — Past Week')).toBeInTheDocument();
+    expect(screen.getByText('Price Intervals — Past Week (daily)')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(6); // header + 5 days
+    expect(rows[1]).toHaveTextContent('2026-10-19'); // formatLabel is identity in tests
+    expect(rows[1]).toHaveTextContent('$342.94');
+    expect(rows[5]).toHaveTextContent('$347.73');
+  });
+
+  it('Fetch works the same against the offline fixtures, for every period', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('GOOG', 'local');
+    await screen.findByTestId('summary-symbol');
+
+    await userEvent.click(fetchButton()); // default period: Day
+    expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
+    expect(screen.getByText('Price Intervals — Past Day (hourly)')).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(15); // header + 14 hourly samples
+    expect(screen.getByTestId('summary-high')).toHaveTextContent('$321.23');
+
+    await userEvent.click(periodRadio('5 Years'));
+    await userEvent.click(fetchButton());
+    await screen.findByText('Price Intervals — Past 5 Years (monthly)');
+    expect(screen.getAllByRole('row')).toHaveLength(62); // header + 61 monthly samples
+    expect(screen.getByTestId('summary-low')).toHaveTextContent('$82.67');
+    expect(screen.getByTestId('summary-low-secondary')).toHaveTextContent('Nov 3, 2022'); // bare date, no TZ shift
+  });
+
+  it('shows a loading state during the fetch and an error inside the section when it fails', async () => {
+    const local = createLocalStockProvider(loadLocalJson);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const flaky: StockProvider = {
+      ...local,
+      async getHighLow(symbol, period) {
+        await gate;
+        if (period === 'YEAR') throw new Error('highlow exploded');
+        return local.getHighLow(symbol, period);
+      },
+    };
+    render(<App service={buildService(flaky)} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+
+    await userEvent.click(periodRadio('Year'));
+    await userEvent.click(fetchButton());
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Fetching past performance for AAPL…');
+    expect(fetchButton()).toBeDisabled();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+
+    release();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('highlow exploded');
+    expect(screen.getByRole('region', { name: /past performance/i })).toContainElement(alert);
+    expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+    expect(fetchButton()).toBeEnabled();
+    // The detail tiles above are unaffected.
+    expect(screen.getByTestId('summary-symbol')).toHaveTextContent('AAPL');
+  });
+
+  it('looking up another symbol clears the previous past-performance results', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+
+    await lookup('META', 'local');
+    expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('META');
+    expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+    expect(screen.getByTestId('price-chart-empty')).toBeInTheDocument();
+  });
+
+  it('fetches from the source the symbol was loaded with, even if the radio changed since', async () => {
+    liveRequests.length = 0;
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+
+    await userEvent.click(screen.getByLabelText(/live api/i)); // change the radio without looking up
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+
+    expect(liveRequests).toEqual([]);
   });
 
   it('offers the six performance periods with Day selected by default', async () => {
@@ -142,9 +261,10 @@ describe('App', () => {
     // Gate the local provider so the second lookup stays in flight until we release it.
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    const local = createLocalStockProvider(loadLocalDetails);
+    const local = createLocalStockProvider(loadLocalJson);
     let calls = 0;
     const gated: StockProvider = {
+      ...local,
       async getDetails(symbol) {
         if (++calls > 1) await gate;
         return local.getDetails(symbol);

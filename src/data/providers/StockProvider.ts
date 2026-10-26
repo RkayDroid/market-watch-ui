@@ -1,19 +1,18 @@
-import type { PriceRecord, StockDetails } from '../../types/stock.ts';
+import type { PerformancePeriod } from '../../types/performance.ts';
+import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
 
 /**
  * Abstraction over a source of stock data (live API, offline JSON fixtures, ...).
- *
- * Details are mandatory — a source that cannot resolve them must reject with
- * {@link SymbolNotFoundError}. Historic prices are optional and currently provided
- * by no source: `GET /stock/{symbol}` carries none, and the history endpoint is not
- * wired up yet. A provider that gains history implements `getPrices` (records
- * sorted oldest → newest) and the "Past Performance" chart and table light up.
+ * Symbols are normalised (upper-case) before they reach a provider. A source that
+ * cannot resolve a symbol must reject with {@link SymbolNotFoundError}.
  */
 export interface StockProvider {
-  /** Resolves reference data for a (normalised, upper-case) symbol. */
+  /** Reference data — `GET /stock/{symbol}`. */
   getDetails(symbol: string): Promise<StockDetails>;
-  /** Resolves the hourly price series (oldest → newest), or `[]` when the source has none. */
-  getPrices?(symbol: string): Promise<PriceRecord[]>;
+  /** Sampled prices over a look-back period — `GET /stock/{symbol}/historic?period=`. */
+  getPriceSeries(symbol: string, period: PerformancePeriod): Promise<PriceSeries>;
+  /** Highest and lowest price over a look-back period — `GET /stock/{symbol}/highlow?period=`. */
+  getHighLow(symbol: string, period: PerformancePeriod): Promise<HighLow>;
 }
 
 export interface SymbolNotFoundOptions {

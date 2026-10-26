@@ -1,42 +1,53 @@
 import axios, { isAxiosError } from 'axios';
-import type { StockDetails } from '../../types/stock.ts';
-import { InvalidStockDetailsError, parseStockDetails } from '../stockDetails.ts';
+import type { PerformancePeriod } from '../../types/performance.ts';
+import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
+import { parseHighLow } from '../highLow.ts';
+import { InvalidPayloadError } from '../payload.ts';
+import { parsePriceSeries } from '../priceSeries.ts';
+import { parseStockDetails } from '../stockDetails.ts';
 import { SymbolNotFoundError, type StockProvider } from './StockProvider.ts';
 
 export const LOCAL_SOURCE_LABEL = 'the offline data';
 
-/** Directory (relative to the Vite base URL) holding the offline `detail-{SYMBOL}.json` fixtures. */
-export const LOCAL_DETAILS_DIR = 'data';
+/** Directory (relative to the Vite base URL) holding the offline JSON fixtures. */
+export const LOCAL_DATA_DIR = 'data';
 
 /**
- * Symbols with a fixture under `public/data/`. Static hosting cannot list a directory,
- * so this is maintained by hand and checked against the folder by `localDetails.test.ts`.
+ * Symbols with fixtures under `public/data/`. Static hosting cannot list a directory,
+ * so this is maintained by hand and checked against the folder by `localFixtures.test.ts`.
  */
 export const OFFLINE_SYMBOLS: readonly string[] = ['AAPL', 'GOOG', 'META'];
 
-/** Path of the offline details file for a symbol, relative to the Vite base URL. */
+/* Fixture paths, relative to the Vite base URL. Names mirror the live endpoints. */
+
+/** `data/detail-{SYMBOL}.json` — the `/stock/{symbol}` payload. */
 export function localDetailsPath(symbol: string): string {
-  return `${LOCAL_DETAILS_DIR}/detail-${encodeURIComponent(symbol)}.json`;
+  return `${LOCAL_DATA_DIR}/detail-${encodeURIComponent(symbol)}.json`;
 }
 
-/**
- * Loads the raw `/stock/{symbol}`-shaped payload for a symbol, or `null` when
- * the offline source has no details file for it.
- */
-export type DetailsLoader = (symbol: string) => Promise<unknown | null>;
+/** `data/historic-{SYMBOL}-{PERIOD}.json` — the `/stock/{symbol}/historic?period=` payload. */
+export function localHistoricPath(symbol: string, period: PerformancePeriod): string {
+  return `${LOCAL_DATA_DIR}/historic-${encodeURIComponent(symbol)}-${period}.json`;
+}
+
+/** `data/highlow-{SYMBOL}-{PERIOD}.json` — the `/stock/{symbol}/highlow?period=` payload. */
+export function localHighLowPath(symbol: string, period: PerformancePeriod): string {
+  return `${LOCAL_DATA_DIR}/highlow-${encodeURIComponent(symbol)}-${period}.json`;
+}
+
+/** Loads the raw JSON at a fixture path, or `null` when the offline source has no such file. */
+export type JsonLoader = (path: string) => Promise<unknown | null>;
 
 /**
- * Fetches `public/data/detail-{SYMBOL}.json` via HTTP. "No file" is signalled either by
- * a 404 or — on hosts with an SPA rewrite that answer every path with `index.html` —
- * by a non-JSON response, so both resolve to `null`.
+ * Fetches fixtures from `public/` via HTTP. "No file" is signalled either by a 404 or —
+ * on hosts with an SPA rewrite that answer every path with `index.html` — by a non-JSON
+ * response, so both resolve to `null`.
  */
-export function createHttpDetailsLoader(baseUrl: string): DetailsLoader {
+export function createHttpJsonLoader(baseUrl: string): JsonLoader {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return async (symbol) => {
+  return async (path) => {
     try {
-      const response = await axios.get<unknown>(`${base}${localDetailsPath(symbol)}`, {
-        headers: { Accept: 'application/json' },
-      });
+      const response = await axios.get<unknown>(`${base}${path}`, { headers: { Accept: 'application/json' } });
       const contentType = String(response.headers?.['content-type'] ?? '');
       return contentType.includes('json') ? response.data : null;
     } catch (err) {
@@ -52,32 +63,44 @@ export interface LocalStockProviderOptions {
 }
 
 /**
- * Offline {@link StockProvider}: details come from `detail-{SYMBOL}.json`, copies of
- * responses captured from the live API. It has no price history.
+ * Offline {@link StockProvider} over `public/data/*.json` — copies of responses captured
+ * from the live API, parsed with the same parsers the live provider uses.
  */
 export function createLocalStockProvider(
-  loadDetails: DetailsLoader,
+  loadJson: JsonLoader,
   { availableSymbols = OFFLINE_SYMBOLS }: LocalStockProviderOptions = {},
 ): StockProvider {
+  async function load<T>(path: string, symbol: string, parse: (payload: unknown) => T): Promise<T> {
+    const payload = await loadJson(path);
+    if (payload === null) {
+      throw new SymbolNotFoundError(symbol, { source: LOCAL_SOURCE_LABEL, availableSymbols });
+    }
+    try {
+      return parse(payload);
+    } catch (err) {
+      if (err instanceof InvalidPayloadError) {
+        throw new Error(`The offline file ${path} is malformed: ${err.reason}.`, { cause: err });
+      }
+      throw err;
+    }
+  }
+
   return {
-    async getDetails(symbol: string): Promise<StockDetails> {
-      const payload = await loadDetails(symbol);
-      if (payload === null) {
-        throw new SymbolNotFoundError(symbol, { source: LOCAL_SOURCE_LABEL, availableSymbols });
-      }
-      try {
-        return parseStockDetails(payload);
-      } catch (err) {
-        if (err instanceof InvalidStockDetailsError) {
-          throw new Error(`The local details file for ${symbol} is malformed: ${err.reason}.`, { cause: err });
-        }
-        throw err;
-      }
+    getDetails(symbol): Promise<StockDetails> {
+      return load(localDetailsPath(symbol), symbol, parseStockDetails);
+    },
+    getPriceSeries(symbol, period): Promise<PriceSeries> {
+      return load(localHistoricPath(symbol, period), symbol, (payload) =>
+        parsePriceSeries(payload, { symbol, period }),
+      );
+    },
+    getHighLow(symbol, period): Promise<HighLow> {
+      return load(localHighLowPath(symbol, period), symbol, (payload) => parseHighLow(payload, { symbol, period }));
     },
   };
 }
 
-/** Default offline provider wired to `public/data/detail-*.json`. */
+/** Default offline provider wired to `public/data/`. */
 export function createDefaultLocalStockProvider(baseUrl: string = import.meta.env.BASE_URL): StockProvider {
-  return createLocalStockProvider(createHttpDetailsLoader(baseUrl));
+  return createLocalStockProvider(createHttpJsonLoader(baseUrl));
 }

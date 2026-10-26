@@ -1,7 +1,12 @@
 import { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
 import detailAapl from '../../../json/detail-AAPL.json';
+import highLowWeek from '../../../json/highlow-AAPL-WEEK.json';
+import historyWeek from '../../../json/history-AAPL-WEEK.json';
+import { parseStockDetails } from '../stockDetails.ts';
 import {
+  buildHighLowUrl,
+  buildHistoricUrl,
   buildStockUrl,
   createLiveApiStockProvider,
   parseLiveApiResponse,
@@ -28,48 +33,53 @@ function fakeClient(impl: (url: string) => Promise<unknown> | unknown) {
   return { client, get };
 }
 
-describe('buildStockUrl', () => {
-  it('composes the /stock/{symbol} path and encodes the symbol', () => {
+/** Routes the three endpoints to the captured AAPL payloads. */
+function aaplApi(url: string): unknown {
+  if (url === 'https://api.test/v1/stock/AAPL') return detailAapl;
+  if (url === 'https://api.test/v1/stock/AAPL/historic?period=WEEK') return historyWeek;
+  if (url === 'https://api.test/v1/stock/AAPL/highlow?period=WEEK') return highLowWeek;
+  throw axiosErr({ status: 404 });
+}
+
+describe('url builders', () => {
+  it('compose the /stock/{symbol} family of urls and encode the symbol', () => {
     expect(buildStockUrl('https://api.test/v1', 'AAPL')).toBe('https://api.test/v1/stock/AAPL');
     expect(buildStockUrl('https://api.test/v1///', 'A B')).toBe('https://api.test/v1/stock/A%20B');
-  });
-
-  it('sends no query string — the endpoint has no interval/limit', () => {
-    expect(buildStockUrl('https://api.test/v1', 'BRK.B')).not.toContain('?');
+    expect(buildHistoricUrl('https://api.test/v1', 'BRK.B', 'HALF_YEAR')).toBe(
+      'https://api.test/v1/stock/BRK.B/historic?period=HALF_YEAR',
+    );
+    expect(buildHighLowUrl('https://api.test/v1/', 'AAPL', 'FIVE_YEAR')).toBe(
+      'https://api.test/v1/stock/AAPL/highlow?period=FIVE_YEAR',
+    );
   });
 });
 
 describe('parseLiveApiResponse', () => {
-  it('maps the captured live payload', () => {
-    expect(parseLiveApiResponse(detailAapl, 'AAPL')).toEqual({
-      symbol: 'AAPL',
-      displayName: 'Apple',
-      longName: 'Apple Inc.',
-      sector: 'Technology',
-      exchange: 'NMS',
-      market: 'us_market',
-      currency: 'USD',
-      language: 'en-US',
-      fulldayPrice: 347.725,
-    });
+  it('returns the parser result for a valid payload', () => {
+    expect(parseLiveApiResponse(parseStockDetails, detailAapl, 'AAPL')).toMatchObject({ displayName: 'Apple' });
   });
 
-  it.each([
-    ['null body', null, /not an object/],
-    ['array body', [], /not an object/],
-    ['missing symbol', { sector: 'X' }, /"symbol" is missing/],
-    ['bad price', { symbol: 'X', fulldayPrice: 'abc' }, /"fulldayPrice" is not a number/],
-  ])('rejects %s as kind=malformed', (_name, payload, pattern) => {
+  it('wraps contract violations as kind=malformed, naming the payload type', () => {
     let caught: unknown;
     try {
-      parseLiveApiResponse(payload, 'X');
+      parseLiveApiResponse(parseStockDetails, { sector: 'X' }, 'X');
     } catch (e) {
       caught = e;
     }
     expect(caught).toBeInstanceOf(LiveApiError);
     expect((caught as LiveApiError).kind).toBe('malformed');
-    expect((caught as LiveApiError).message).toMatch(/^The live API returned an unexpected response for X: /);
-    expect((caught as LiveApiError).message).toMatch(pattern);
+    expect((caught as LiveApiError).message).toBe(
+      'The live API returned an unexpected stock details response for X: "symbol" is missing.',
+    );
+  });
+
+  it('lets unrelated errors through untouched', () => {
+    const boom = new Error('boom');
+    expect(() =>
+      parseLiveApiResponse(() => {
+        throw boom;
+      }, {}, 'X'),
+    ).toThrow(boom);
   });
 });
 
@@ -111,8 +121,8 @@ describe('toLiveApiError', () => {
 });
 
 describe('createLiveApiStockProvider', () => {
-  it('requests GET {base}/stock/{symbol} with timeout and accept header, and returns parsed details', async () => {
-    const { client, get } = fakeClient(() => detailAapl);
+  it('getDetails requests GET {base}/stock/{symbol} with timeout and accept header', async () => {
+    const { client, get } = fakeClient(aaplApi);
     const provider = createLiveApiStockProvider(config, { client });
 
     const details = await provider.getDetails('AAPL');
@@ -124,13 +134,42 @@ describe('createLiveApiStockProvider', () => {
     });
   });
 
-  it('has no price history — the endpoint does not provide any', () => {
-    const { client } = fakeClient(() => detailAapl);
-    expect(createLiveApiStockProvider(config, { client }).getPrices).toBeUndefined();
+  it('getPriceSeries requests GET {base}/stock/{symbol}/historic?period= and parses the series', async () => {
+    const { client, get } = fakeClient(aaplApi);
+    const series = await createLiveApiStockProvider(config, { client }).getPriceSeries('AAPL', 'WEEK');
+
+    expect(get.mock.calls[0][0]).toBe('https://api.test/v1/stock/AAPL/historic?period=WEEK');
+    expect(series).toMatchObject({ symbol: 'AAPL', period: 'WEEK', interval: '1d' });
+    expect(series.records).toHaveLength(5);
+  });
+
+  it('getHighLow requests GET {base}/stock/{symbol}/highlow?period= and parses the figures', async () => {
+    const { client, get } = fakeClient(aaplApi);
+    const highLow = await createLiveApiStockProvider(config, { client }).getHighLow('AAPL', 'WEEK');
+
+    expect(get.mock.calls[0][0]).toBe('https://api.test/v1/stock/AAPL/highlow?period=WEEK');
+    expect(highLow).toEqual({
+      symbol: 'AAPL',
+      period: 'WEEK',
+      high: { price: 351.73, occurredAt: '2026-10-23T09:30:00-04:00' },
+      low: { price: 338.7, occurredAt: '2026-10-20T09:30:00-04:00' },
+    });
+  });
+
+  it('rejects a series or high/low for a different symbol or period than requested', async () => {
+    const { client } = fakeClient(aaplApi);
+    const provider = createLiveApiStockProvider(config, { client });
+    // Route the MONTH url to the WEEK capture.
+    const { client: mismatched } = fakeClient((url) => aaplApi(url.replace('MONTH', 'WEEK')));
+    await expect(createLiveApiStockProvider(config, { client: mismatched }).getPriceSeries('AAPL', 'MONTH')).rejects.toMatchObject({
+      kind: 'malformed',
+      message: 'The live API returned an unexpected price history response for AAPL: "period" is WEEK, expected MONTH.',
+    });
+    await expect(provider.getHighLow('AAPL', 'YEAR')).rejects.toBeInstanceOf(SymbolNotFoundError); // 404 in the fake
   });
 
   it('sends a bearer token when an api key is configured', async () => {
-    const { client, get } = fakeClient(() => detailAapl);
+    const { client, get } = fakeClient(aaplApi);
     await createLiveApiStockProvider({ ...config, apiKey: 'k3y' }, { client }).getDetails('AAPL');
 
     expect(get.mock.calls[0][1]).toMatchObject({ headers: { Authorization: 'Bearer k3y' } });

@@ -1,16 +1,23 @@
 import type { StockProvider } from '../data/providers/StockProvider.ts';
+import type { PerformancePeriod } from '../types/performance.ts';
+import type { DataSource, PastPerformance, StockData } from '../types/stock.ts';
 import { normalizeSymbol } from '../utils/symbol.ts';
-import type { DataSource, StockData } from '../types/stock.ts';
-import { buildStockData, type HourLabelFormatter } from './stockAnalytics.ts';
+import { summarizePerformance, type LabelFormatter } from './stockAnalytics.ts';
 
 export type ProviderRegistry = Record<DataSource, StockProvider>;
 
 export interface StockService {
+  /** Resolves a symbol's details (`GET /stock/{symbol}`). */
   lookup(symbol: string, source: DataSource): Promise<StockData>;
+  /**
+   * Resolves the "Past Performance" view for a symbol and period by calling
+   * `GET /stock/{symbol}/historic?period=` and `GET /stock/{symbol}/highlow?period=` together.
+   */
+  performance(symbol: string, period: PerformancePeriod, source: DataSource): Promise<PastPerformance>;
 }
 
 export interface StockServiceOptions {
-  formatLabel?: HourLabelFormatter;
+  formatLabel?: LabelFormatter;
 }
 
 export class InvalidSymbolError extends Error {
@@ -20,12 +27,15 @@ export class InvalidSymbolError extends Error {
   }
 }
 
+function requireSymbol(rawSymbol: string): string {
+  const symbol = normalizeSymbol(rawSymbol);
+  if (!symbol) throw new InvalidSymbolError();
+  return symbol;
+}
+
 /**
- * Composes a provider lookup with the analytics layer. Providers are injected so
+ * Composes provider calls with the analytics layer. Providers are injected so
  * the service (and the UI above it) can be tested with fakes.
- *
- * Details and history are requested together; a provider without `getPrices`
- * (e.g. the live API) yields a `StockData` with `history: null`.
  */
 export function createStockService(
   providers: ProviderRegistry,
@@ -33,16 +43,19 @@ export function createStockService(
 ): StockService {
   return {
     async lookup(rawSymbol, source) {
-      const symbol = normalizeSymbol(rawSymbol);
-      if (!symbol) {
-        throw new InvalidSymbolError();
-      }
+      const symbol = requireSymbol(rawSymbol);
+      const details = await providers[source].getDetails(symbol);
+      return { symbol: details.symbol, details };
+    },
+
+    async performance(rawSymbol, period, source) {
+      const symbol = requireSymbol(rawSymbol);
       const provider = providers[source];
-      const [details, records] = await Promise.all([
-        provider.getDetails(symbol),
-        provider.getPrices ? provider.getPrices(symbol) : Promise.resolve([]),
+      const [series, highLow] = await Promise.all([
+        provider.getPriceSeries(symbol, period),
+        provider.getHighLow(symbol, period),
       ]);
-      return buildStockData(details, records, options.formatLabel);
+      return summarizePerformance(series, highLow, options.formatLabel);
     },
   };
 }

@@ -1,19 +1,19 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { HourlyPrice } from '../types/stock.ts';
+import type { TrendPoint } from '../types/stock.ts';
 import PriceChart from './PriceChart.tsx';
 
-const history: HourlyPrice[] = [
-  { hour: 'Oct 21, 03:00 PM', price: 275.2, trend: 'neutral' },
-  { hour: 'Oct 21, 04:00 PM', price: 274.8, trend: 'down' },
-  { hour: 'Oct 21, 05:00 PM', price: 282.5, trend: 'up' },
+const history: TrendPoint[] = [
+  { label: 'Oct 21, 03:00 PM', price: 275.2, trend: 'neutral' },
+  { label: 'Oct 21, 04:00 PM', price: 274.8, trend: 'down' },
+  { label: 'Oct 21, 05:00 PM', price: 282.5, trend: 'up' },
 ];
 
 describe('PriceChart', () => {
   it('renders an accessible SVG with a point per hour and the series paths', () => {
     render(<PriceChart history={history} />);
 
-    const svg = screen.getByRole('img', { name: /24-Hour Price Trend: 3 hourly price points/ });
+    const svg = screen.getByRole('img', { name: /Price Trend: 3 price points/ });
     expect(svg).toHaveAttribute('viewBox', '0 0 800 280'); // jsdom can't measure → fallback width
     expect(svg).toHaveAttribute('data-direction', 'up');
 
@@ -29,7 +29,7 @@ describe('PriceChart', () => {
   it('labels both axes', () => {
     render(<PriceChart history={history} />);
     const xTicks = screen.getAllByTestId('x-tick');
-    expect(xTicks.map((t) => t.textContent)).toEqual(history.map((h) => h.hour));
+    expect(xTicks.map((t) => t.textContent)).toEqual(history.map((h) => h.label));
     expect(xTicks.map((t) => t.getAttribute('text-anchor'))).toEqual(['start', 'middle', 'end']);
     const yLabels = screen.getAllByTestId('y-tick').map((t) => t.textContent);
     expect(yLabels.length).toBeGreaterThan(0);

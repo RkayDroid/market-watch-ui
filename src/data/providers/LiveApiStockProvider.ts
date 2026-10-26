@@ -1,23 +1,23 @@
 import axios, { isAxiosError, type AxiosRequestConfig } from 'axios';
 import type { LiveApiConfig } from '../../config/liveApiConfig.ts';
-import type { StockDetails } from '../../types/stock.ts';
-import { InvalidStockDetailsError, parseStockDetails } from '../stockDetails.ts';
+import type { PerformancePeriod } from '../../types/performance.ts';
+import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
+import { parseHighLow } from '../highLow.ts';
+import { InvalidPayloadError } from '../payload.ts';
+import { parsePriceSeries } from '../priceSeries.ts';
+import { parseStockDetails } from '../stockDetails.ts';
 import { LiveApiError, SymbolNotFoundError, type StockProvider } from './StockProvider.ts';
 
 /* ---------------------------------------------------------------------------
- * API contract
+ * API contract (payload shapes are documented next to each parser in src/data/)
  *
- *   GET {baseUrl}/stock/{SYMBOL}
- *   Authorization: Bearer {apiKey}          (only when configured)
+ *   GET {baseUrl}/stock/{SYMBOL}                          → stock details
+ *   GET {baseUrl}/stock/{SYMBOL}/historic?period={PERIOD} → sampled prices over the period
+ *   GET {baseUrl}/stock/{SYMBOL}/highlow?period={PERIOD}  → high/low over the period
+ *   Authorization: Bearer {apiKey}                        (only when configured)
  *
- *   200 → { "ticker": "AAPL", "symbol": "AAPL", "displayName": "Apple",
- *           "longName": "Apple Inc.", "sector": "Technology", "exchange": "NMS",
- *           "market": "us_market", "currency": "USD", "language": "en-US",
- *           "fulldayPrice": 347.725 }
+ *   PERIOD ∈ DAY | WEEK | MONTH | HALF_YEAR | YEAR | FIVE_YEAR
  *   404 → symbol unknown
- *
- * The endpoint carries no historic prices, so this provider has no `getPrices`;
- * the UI hides the chart and hourly table for this source.
  * ------------------------------------------------------------------------- */
 
 export const LIVE_API_SOURCE_LABEL = 'the live API';
@@ -27,24 +27,37 @@ export interface HttpClient {
   get(url: string, config?: AxiosRequestConfig): Promise<{ data: unknown }>;
 }
 
-/** Builds the request URL for a symbol. Pure; exported for testing. */
+function stockBase(baseUrl: string, symbol: string): string {
+  return `${baseUrl.replace(/\/+$/, '')}/stock/${encodeURIComponent(symbol)}`;
+}
+
+/** `{base}/stock/{SYMBOL}`. Pure; exported for testing. */
 export function buildStockUrl(baseUrl: string, symbol: string): string {
-  const base = baseUrl.replace(/\/+$/, '');
-  return `${base}/stock/${encodeURIComponent(symbol)}`;
+  return stockBase(baseUrl, symbol);
+}
+
+/** `{base}/stock/{SYMBOL}/historic?period={PERIOD}`. */
+export function buildHistoricUrl(baseUrl: string, symbol: string, period: PerformancePeriod): string {
+  return `${stockBase(baseUrl, symbol)}/historic?${new URLSearchParams({ period })}`;
+}
+
+/** `{base}/stock/{SYMBOL}/highlow?period={PERIOD}`. */
+export function buildHighLowUrl(baseUrl: string, symbol: string, period: PerformancePeriod): string {
+  return `${stockBase(baseUrl, symbol)}/highlow?${new URLSearchParams({ period })}`;
 }
 
 /**
- * Validates the raw API payload and maps it to {@link StockDetails}.
- * Throws {@link LiveApiError} (`kind: 'malformed'`) for anything off-contract.
+ * Runs a payload parser, converting contract violations into
+ * {@link LiveApiError} (`kind: 'malformed'`).
  */
-export function parseLiveApiResponse(payload: unknown, symbol: string): StockDetails {
+export function parseLiveApiResponse<T>(parse: (payload: unknown) => T, payload: unknown, symbol: string): T {
   try {
-    return parseStockDetails(payload);
+    return parse(payload);
   } catch (err) {
-    if (err instanceof InvalidStockDetailsError) {
+    if (err instanceof InvalidPayloadError) {
       throw new LiveApiError(
         'malformed',
-        `The live API returned an unexpected response for ${symbol}: ${err.reason}.`,
+        `The live API returned an unexpected ${err.subject} response for ${symbol}: ${err.reason}.`,
       );
     }
     throw err;
@@ -94,15 +107,28 @@ export function createLiveApiStockProvider(
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
 
+  async function request<T>(url: string, symbol: string, parse: (payload: unknown) => T): Promise<T> {
+    try {
+      const response = await client.get(url, { headers, timeout: config.timeoutMs });
+      return parseLiveApiResponse(parse, response.data, symbol);
+    } catch (err) {
+      throw toLiveApiError(err, symbol, url);
+    }
+  }
+
   return {
-    async getDetails(symbol: string): Promise<StockDetails> {
-      const url = buildStockUrl(config.baseUrl, symbol);
-      try {
-        const response = await client.get(url, { headers, timeout: config.timeoutMs });
-        return parseLiveApiResponse(response.data, symbol);
-      } catch (err) {
-        throw toLiveApiError(err, symbol, url);
-      }
+    getDetails(symbol): Promise<StockDetails> {
+      return request(buildStockUrl(config.baseUrl, symbol), symbol, parseStockDetails);
+    },
+    getPriceSeries(symbol, period): Promise<PriceSeries> {
+      return request(buildHistoricUrl(config.baseUrl, symbol, period), symbol, (payload) =>
+        parsePriceSeries(payload, { symbol, period }),
+      );
+    },
+    getHighLow(symbol, period): Promise<HighLow> {
+      return request(buildHighLowUrl(config.baseUrl, symbol, period), symbol, (payload) =>
+        parseHighLow(payload, { symbol, period }),
+      );
     },
   };
 }

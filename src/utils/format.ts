@@ -65,3 +65,24 @@ export function describeCurrency(code: string): string | undefined {
 export function describeLanguage(tag: string): string | undefined {
   return displayName('language', tag);
 }
+
+const INTERVAL_UNITS: Readonly<Record<string, [singular: string, adverb: string]>> = {
+  m: ['minute', 'every minute'],
+  h: ['hour', 'hourly'],
+  d: ['day', 'daily'],
+  wk: ['week', 'weekly'],
+  mo: ['month', 'monthly'],
+  y: ['year', 'yearly'],
+};
+
+/**
+ * Describes an API sampling interval: `"1h" → "hourly"`, `"1d" → "daily"`,
+ * `"2wk" → "every 2 weeks"`, `"1mo" → "monthly"`. Unknown formats are returned as-is.
+ */
+export function describeInterval(interval: string): string {
+  const match = /^(\d+)\s*(m|h|d|wk|mo|y)$/i.exec(interval.trim());
+  if (!match) return interval;
+  const count = Number(match[1]);
+  const [singular, adverb] = INTERVAL_UNITS[match[2].toLowerCase()];
+  return count === 1 ? adverb : `every ${count} ${singular}s`;
+}

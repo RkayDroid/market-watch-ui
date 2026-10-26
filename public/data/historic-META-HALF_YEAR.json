@@ -1,0 +1,61 @@
+{
+  "ticker": "META",
+  "period": "HALF_YEAR",
+  "interval": "2wk",
+  "count": 13,
+  "cached": true,
+  "data": [
+    {
+      "datetime": "2026-05-08",
+      "price": 608.5852
+    },
+    {
+      "datetime": "2026-05-22",
+      "price": 609.2142
+    },
+    {
+      "datetime": "2026-06-05",
+      "price": 591.9838
+    },
+    {
+      "datetime": "2026-06-18",
+      "price": 576.7648
+    },
+    {
+      "datetime": "2026-07-02",
+      "price": 582.4404
+    },
+    {
+      "datetime": "2026-07-17",
+      "price": 645.5006
+    },
+    {
+      "datetime": "2026-07-31",
+      "price": 556.271
+    },
+    {
+      "datetime": "2026-08-14",
+      "price": 589.3848
+    },
+    {
+      "datetime": "2026-08-28",
+      "price": 577.5642
+    },
+    {
+      "datetime": "2026-09-11",
+      "price": 647.519
+    },
+    {
+      "datetime": "2026-09-25",
+      "price": 751.66
+    },
+    {
+      "datetime": "2026-10-09",
+      "price": 718.67
+    },
+    {
+      "datetime": "2026-10-23",
+      "price": 642.62
+    }
+  ]
+}

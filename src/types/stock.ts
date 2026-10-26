@@ -1,4 +1,6 @@
-/** Direction of an hourly price move relative to the previous hour. */
+import type { PerformancePeriod } from './performance.ts';
+
+/** Direction of a price move relative to the previous sample. */
 export type Trend = 'up' | 'down' | 'neutral';
 
 /** Where stock data is sourced from: the live API, or the offline JSON fixtures under `public/data`. */
@@ -12,9 +14,34 @@ export function isDataSource(value: string): value is DataSource {
 
 /** A single observed price for a symbol at a point in time. */
 export interface PriceRecord {
-  /** ISO-8601 timestamp. */
+  /** ISO-8601 timestamp, or a bare `YYYY-MM-DD` date for daily and coarser samples. */
   date: string;
   rate: number;
+}
+
+/** Chronological price samples for one look-back period, as returned by `GET /stock/{symbol}/historic`. */
+export interface PriceSeries {
+  symbol: string;
+  period: PerformancePeriod;
+  /** Sampling interval reported by the API, e.g. "1h", "1d", "2wk", "1mo". */
+  interval: string;
+  /** Sorted oldest → newest. Never empty. */
+  records: PriceRecord[];
+}
+
+/** A price together with the moment it was observed. */
+export interface PriceExtreme {
+  price: number;
+  /** ISO-8601 timestamp or bare date, as given by the API. */
+  occurredAt: string;
+}
+
+/** Highest and lowest price over a look-back period, as returned by `GET /stock/{symbol}/highlow`. */
+export interface HighLow {
+  symbol: string;
+  period: PerformancePeriod;
+  high: PriceExtreme;
+  low: PriceExtreme;
 }
 
 /**
@@ -42,30 +69,30 @@ export interface StockDetails {
   fulldayPrice?: number;
 }
 
-/** One row of the hourly breakdown shown in the UI. */
-export interface HourlyPrice {
-  hour: string;
+/** One sampled point of a price series as shown in the chart and table. */
+export interface TrendPoint {
+  /** Formatted timestamp of the sample. */
+  label: string;
   price: number;
   trend: Trend;
 }
 
-/** Everything derived from a chronological hourly price series. */
-export interface PriceHistory {
-  currentPrice: number;
-  highPrice: number;
-  lowPrice: number;
+/** View model of the "Past Performance" section for one symbol and period. */
+export interface PastPerformance {
+  symbol: string;
+  period: PerformancePeriod;
+  interval: string;
+  /** Most recent sample of the series. */
+  latestPrice: number;
+  /** Percentage change from the first to the last sample of the series. */
   changePercent: number;
-  hourly: HourlyPrice[];
+  points: TrendPoint[];
+  high: PriceExtreme;
+  low: PriceExtreme;
 }
 
-/** Fully derived view model for a stock lookup. */
+/** View model for a stock lookup. */
 export interface StockData {
   symbol: string;
   details: StockDetails;
-  /**
-   * `null` when the data source has no historic prices for the symbol.
-   * Currently always `null`: no source provides history yet, so the chart and
-   * table in the "Past Performance" section render empty.
-   */
-  history: PriceHistory | null;
 }

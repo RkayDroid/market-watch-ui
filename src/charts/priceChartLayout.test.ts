@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { HourlyPrice } from '../types/stock.ts';
+import type { TrendPoint } from '../types/stock.ts';
 import { anchorFor, computeDirection, computePriceChartLayout, DEFAULT_MARGIN } from './priceChartLayout.ts';
 
-const h = (price: number, hour = `h${price}`): HourlyPrice => ({ hour, price, trend: 'neutral' });
+const h = (price: number, label = `h${price}`): TrendPoint => ({ label, price, trend: 'neutral' });
 
 const options = { width: 200, height: 100, margin: { top: 10, right: 10, bottom: 10, left: 40 } };
 
@@ -51,9 +51,9 @@ describe('computePriceChartLayout', () => {
     expect(layout.direction).toBe('up');
   });
 
-  it('carries through hour, price, trend and index for each point', () => {
-    const layout = computePriceChartLayout([{ hour: '3pm', price: 1, trend: 'up' }], options);
-    expect(layout.points[0]).toMatchObject({ index: 0, hour: '3pm', price: 1, trend: 'up' });
+  it('carries through label, price, trend and index for each point', () => {
+    const layout = computePriceChartLayout([{ label: '3pm', price: 1, trend: 'up' }], options);
+    expect(layout.points[0]).toMatchObject({ index: 0, label: '3pm', price: 1, trend: 'up' });
     // single point sits in the middle of the plot
     expect(layout.points[0].x).toBe(115);
   });

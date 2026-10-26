@@ -7,7 +7,6 @@ import { useStockLookup } from './useStockLookup.ts';
 const stock = (symbol: string): StockData => ({
   symbol,
   details: { symbol },
-  history: null,
 });
 
 function deferred<T>() {
@@ -27,10 +26,10 @@ afterEach(() => vi.useRealTimers());
 describe('useStockLookup', () => {
   it('transitions idle → loading → data', async () => {
     const d = deferred<StockData>();
-    const service: StockService = { lookup: () => d.promise };
+    const service: StockService = { lookup: () => d.promise, performance: vi.fn() };
     const { result } = renderHook(() => useStockLookup(service, instant));
 
-    expect(result.current).toMatchObject({ data: null, loading: false, pendingSymbol: null, error: null });
+    expect(result.current).toMatchObject({ data: null, source: null, loading: false, pendingSymbol: null, error: null });
 
     act(() => {
       void result.current.lookup(' v ', 'local');
@@ -42,14 +41,14 @@ describe('useStockLookup', () => {
       d.resolve(stock('V'));
       await d.promise;
     });
-    expect(result.current).toMatchObject({ loading: false, pendingSymbol: null, error: null });
+    expect(result.current).toMatchObject({ source: 'local', loading: false, pendingSymbol: null, error: null });
     expect(result.current.data?.symbol).toBe('V');
   });
 
   it('clears previous results as soon as a new lookup starts', async () => {
     const second = deferred<StockData>();
     let call = 0;
-    const service: StockService = { lookup: async () => (++call === 1 ? stock('V') : second.promise) };
+    const service: StockService = { performance: vi.fn(), lookup: async () => (++call === 1 ? stock('V') : second.promise) };
     const { result } = renderHook(() => useStockLookup(service, instant));
 
     await act(() => result.current.lookup('V', 'local'));
@@ -64,6 +63,7 @@ describe('useStockLookup', () => {
 
   it('exposes a structured error and clears data', async () => {
     const service: StockService = {
+      performance: vi.fn(),
       lookup: async (symbol) => {
         if (symbol === 'BAD') throw new Error('Something specific');
         return stock(symbol);
@@ -81,7 +81,7 @@ describe('useStockLookup', () => {
 
   it('keeps loading for at least minLoadingMs even when the source is instant', async () => {
     vi.useFakeTimers();
-    const service: StockService = { lookup: async (s) => stock(s) };
+    const service: StockService = { performance: vi.fn(), lookup: async (s) => stock(s) };
     const { result } = renderHook(() => useStockLookup(service, { minLoadingMs: 1000 }));
 
     act(() => {
@@ -100,7 +100,7 @@ describe('useStockLookup', () => {
     const first = deferred<StockData>();
     const second = deferred<StockData>();
     let call = 0;
-    const service: StockService = { lookup: () => (++call === 1 ? first.promise : second.promise) };
+    const service: StockService = { performance: vi.fn(), lookup: () => (++call === 1 ? first.promise : second.promise) };
     const { result } = renderHook(() => useStockLookup(service, instant));
 
     act(() => {

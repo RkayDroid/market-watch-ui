@@ -1,7 +1,7 @@
-Market Watch UI — cumulative change set vs. the original baseline (rounds 1 + 2)
+Market Watch UI — cumulative change set vs. the original baseline (rounds 1 + 2 + 3)
 Unzip over the project root (market-watch-ui/), overwriting files, then DELETE the files below.
 
-=== DELETE these files/folders locally ===
+=== DELETE these files locally (if present) ===
 docs/screenshots/AAPL-overview.png
 docs/screenshots/GOOG-overview.png
 docs/screenshots/META-overview.png
@@ -30,16 +30,59 @@ docs/screenshots/00-initial.png
 docs/screenshots/01-loading.png
 docs/screenshots/90-not-found.png
 docs/screenshots/91-live-api-unreachable.png
+docs/screenshots/AAPL-WEEK.png
 docs/screenshots/AAPL.png
+docs/screenshots/GOOG-DAY.png
 docs/screenshots/GOOG.png
+docs/screenshots/META-FIVE_YEAR.png
 docs/screenshots/META.png
 docs/screenshots/live-META.png
 public/data/detail-AAPL.json
 public/data/detail-GOOG.json
 public/data/detail-META.json
+public/data/highlow-AAPL-DAY.json
+public/data/highlow-AAPL-FIVE_YEAR.json
+public/data/highlow-AAPL-HALF_YEAR.json
+public/data/highlow-AAPL-MONTH.json
+public/data/highlow-AAPL-WEEK.json
+public/data/highlow-AAPL-YEAR.json
+public/data/highlow-GOOG-DAY.json
+public/data/highlow-GOOG-FIVE_YEAR.json
+public/data/highlow-GOOG-HALF_YEAR.json
+public/data/highlow-GOOG-MONTH.json
+public/data/highlow-GOOG-WEEK.json
+public/data/highlow-GOOG-YEAR.json
+public/data/highlow-META-DAY.json
+public/data/highlow-META-FIVE_YEAR.json
+public/data/highlow-META-HALF_YEAR.json
+public/data/highlow-META-MONTH.json
+public/data/highlow-META-WEEK.json
+public/data/highlow-META-YEAR.json
+public/data/historic-AAPL-DAY.json
+public/data/historic-AAPL-FIVE_YEAR.json
+public/data/historic-AAPL-HALF_YEAR.json
+public/data/historic-AAPL-MONTH.json
+public/data/historic-AAPL-WEEK.json
+public/data/historic-AAPL-YEAR.json
+public/data/historic-GOOG-DAY.json
+public/data/historic-GOOG-FIVE_YEAR.json
+public/data/historic-GOOG-HALF_YEAR.json
+public/data/historic-GOOG-MONTH.json
+public/data/historic-GOOG-WEEK.json
+public/data/historic-GOOG-YEAR.json
+public/data/historic-META-DAY.json
+public/data/historic-META-FIVE_YEAR.json
+public/data/historic-META-HALF_YEAR.json
+public/data/historic-META-MONTH.json
+public/data/historic-META-WEEK.json
+public/data/historic-META-YEAR.json
 src/App.default.test.tsx
 src/App.test.tsx
 src/App.tsx
+src/charts/priceChartLayout.test.ts
+src/charts/priceChartLayout.ts
+src/components/HourlyPriceTable.test.tsx
+src/components/HourlyPriceTable.tsx
 src/components/LoadingIndicator.tsx
 src/components/LookupForm.test.tsx
 src/components/LookupForm.tsx
@@ -47,13 +90,21 @@ src/components/PastPerformanceSection.test.tsx
 src/components/PastPerformanceSection.tsx
 src/components/PeriodSelector.test.tsx
 src/components/PeriodSelector.tsx
+src/components/PriceChart.test.tsx
+src/components/PriceChart.tsx
 src/components/StockDetailCards.test.tsx
 src/components/StockDetailCards.tsx
 src/components/StockSummaryCards.test.tsx
 src/components/StockSummaryCards.tsx
 src/components/Tile.tsx
 src/config/liveApiConfig.ts
-src/data/localDetails.test.ts
+src/data/highLow.test.ts
+src/data/highLow.ts
+src/data/localFixtures.test.ts
+src/data/payload.test.ts
+src/data/payload.ts
+src/data/priceSeries.test.ts
+src/data/priceSeries.ts
 src/data/providers/LiveApiStockProvider.test.ts
 src/data/providers/LiveApiStockProvider.ts
 src/data/providers/LocalStockProvider.test.ts
@@ -63,7 +114,10 @@ src/data/stockDetails.test.ts
 src/data/stockDetails.ts
 src/errors/lookupError.test.ts
 src/errors/lookupError.ts
+src/hooks/usePerformanceLookup.test.tsx
+src/hooks/usePerformanceLookup.ts
 src/hooks/useStockLookup.test.tsx
+src/hooks/useStockLookup.ts
 src/services/stockAnalytics.test.ts
 src/services/stockAnalytics.ts
 src/services/stockService.test.ts

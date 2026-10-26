@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import detailGoog from '../../json/detail-GOOG.json';
-import { InvalidStockDetailsError, parseStockDetails } from './stockDetails.ts';
+import { InvalidPayloadError } from './payload.ts';
+import { parseStockDetails } from './stockDetails.ts';
 
 describe('parseStockDetails', () => {
   it('maps every field of the captured live payload', () => {
@@ -59,8 +60,8 @@ describe('parseStockDetails', () => {
     } catch (e) {
       caught = e;
     }
-    expect(caught).toBeInstanceOf(InvalidStockDetailsError);
-    expect((caught as InvalidStockDetailsError).reason).toBe(reason);
+    expect(caught).toBeInstanceOf(InvalidPayloadError);
+    expect((caught as InvalidPayloadError).reason).toBe(reason);
     expect((caught as Error).message).toBe(`Invalid stock details: ${reason}.`);
   });
 });

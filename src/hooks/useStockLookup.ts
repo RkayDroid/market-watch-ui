@@ -6,6 +6,8 @@ import { withMinimumDuration } from '../utils/timing.ts';
 
 export interface StockLookupState {
   data: StockData | null;
+  /** Source `data` was loaded from, so follow-up requests (e.g. past performance) use the same one. */
+  source: DataSource | null;
   loading: boolean;
   /** Symbol (as typed) of the in-flight request, for the loading indicator. */
   pendingSymbol: string | null;
@@ -23,7 +25,7 @@ export interface UseStockLookupOptions {
 
 export const DEFAULT_MIN_LOADING_MS = 1000;
 
-const IDLE: StockLookupState = { data: null, loading: false, pendingSymbol: null, error: null };
+const IDLE: StockLookupState = { data: null, source: null, loading: false, pendingSymbol: null, error: null };
 
 /**
  * Manages the async lifecycle of a stock lookup. Starting a lookup clears previous
@@ -50,11 +52,11 @@ export function useStockLookup(
       const id = ++requestId.current;
       const isCurrent = () => mounted.current && id === requestId.current;
 
-      setState({ data: null, loading: true, pendingSymbol: symbol.trim().toUpperCase(), error: null });
+      setState({ ...IDLE, loading: true, pendingSymbol: symbol.trim().toUpperCase() });
 
       try {
         const data = await withMinimumDuration(service.lookup(symbol, source), minLoadingMs);
-        if (isCurrent()) setState({ ...IDLE, data });
+        if (isCurrent()) setState({ ...IDLE, data, source });
       } catch (err) {
         if (isCurrent()) setState({ ...IDLE, error: toLookupError(err) });
       }

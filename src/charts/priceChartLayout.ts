@@ -1,4 +1,4 @@
-import type { HourlyPrice, Trend } from '../types/stock.ts';
+import type { TrendPoint, Trend } from '../types/stock.ts';
 import { buildAreaPath, buildLinePath } from './paths.ts';
 import { createLinearScale, generateTicks, padDomain, selectTickIndices } from './scales.ts';
 
@@ -22,7 +22,7 @@ export interface ChartPoint {
   y: number;
   index: number;
   price: number;
-  hour: string;
+  label: string;
   trend: Trend;
 }
 
@@ -66,7 +66,7 @@ export function anchorFor(index: number, count: number): TextAnchor {
   return 'middle';
 }
 
-export function computeDirection(history: readonly HourlyPrice[]): PriceChartLayout['direction'] {
+export function computeDirection(history: readonly TrendPoint[]): PriceChartLayout['direction'] {
   if (history.length < 2) return 'flat';
   const first = history[0].price;
   const last = history[history.length - 1].price;
@@ -80,7 +80,7 @@ export function computeDirection(history: readonly HourlyPrice[]): PriceChartLay
  * and path strings. Pure; fully testable without a DOM.
  */
 export function computePriceChartLayout(
-  history: readonly HourlyPrice[],
+  history: readonly TrendPoint[],
   options: PriceChartOptions,
 ): PriceChartLayout {
   const { width, height, yTickCount = 5, maxXTicks = 6 } = options;
@@ -118,7 +118,7 @@ export function computePriceChartLayout(
     y: yScale(h.price),
     index,
     price: h.price,
-    hour: h.hour,
+    label: h.label,
     trend: h.trend,
   }));
 
@@ -129,7 +129,7 @@ export function computePriceChartLayout(
 
   const xTicks: XTick[] = selectTickIndices(history.length, maxXTicks).map((index) => ({
     index,
-    label: history[index].hour,
+    label: history[index].label,
     x: xScale(index),
     anchor: anchorFor(index, history.length),
   }));

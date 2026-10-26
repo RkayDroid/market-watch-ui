@@ -1,66 +1,100 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { StockProvider } from '../data/providers/StockProvider.ts';
+import type { HighLow, PriceSeries } from '../types/stock.ts';
 import { createStockService, InvalidSymbolError } from './stockService.ts';
 
-const series = [
-  { date: '2026-10-21T15:00:00Z', rate: 100 },
-  { date: '2026-10-21T16:00:00Z', rate: 110 },
-];
+const series: PriceSeries = {
+  symbol: 'NFLX',
+  period: 'WEEK',
+  interval: '1d',
+  records: [
+    { date: '2026-10-19', rate: 100 },
+    { date: '2026-10-20', rate: 110 },
+  ],
+};
+const highLow: HighLow = {
+  symbol: 'NFLX',
+  period: 'WEEK',
+  high: { price: 112, occurredAt: '2026-10-20' },
+  low: { price: 98, occurredAt: '2026-10-19' },
+};
 
-function fakeProvider(withPrices = true) {
+function fakeProvider() {
   const getDetails = vi.fn(async (symbol: string) => ({ symbol, displayName: `${symbol} Inc.` }));
-  const getPrices = vi.fn(async () => series);
-  const provider: StockProvider = withPrices ? { getDetails, getPrices } : { getDetails };
-  return { provider, getDetails, getPrices };
+  const getPriceSeries = vi.fn(async () => series);
+  const getHighLow = vi.fn(async () => highLow);
+  const provider: StockProvider = { getDetails, getPriceSeries, getHighLow };
+  return { provider, getDetails, getPriceSeries, getHighLow };
 }
 
 describe('createStockService', () => {
-  it('routes to the provider for the requested source with a normalised symbol', async () => {
-    const api = fakeProvider();
-    const local = fakeProvider();
-    const service = createStockService({ api: api.provider, local: local.provider }, { formatLabel: (d) => d });
+  describe('lookup', () => {
+    it('routes to the provider for the requested source with a normalised symbol', async () => {
+      const api = fakeProvider();
+      const local = fakeProvider();
+      const service = createStockService({ api: api.provider, local: local.provider });
 
-    const result = await service.lookup('  nflx ', 'local');
+      const result = await service.lookup('  nflx ', 'local');
 
-    expect(local.getDetails).toHaveBeenCalledWith('NFLX');
-    expect(local.getPrices).toHaveBeenCalledWith('NFLX');
-    expect(api.getDetails).not.toHaveBeenCalled();
-    expect(result.symbol).toBe('NFLX');
-    expect(result.details).toEqual({ symbol: 'NFLX', displayName: 'NFLX Inc.' });
-    expect(result.history).toMatchObject({ currentPrice: 110, changePercent: 10 });
-    expect(result.history?.hourly).toHaveLength(2);
+      expect(local.getDetails).toHaveBeenCalledWith('NFLX');
+      expect(api.getDetails).not.toHaveBeenCalled();
+      expect(local.getPriceSeries).not.toHaveBeenCalled();
+      expect(result).toEqual({ symbol: 'NFLX', details: { symbol: 'NFLX', displayName: 'NFLX Inc.' } });
+    });
+
+    it('uses the symbol reported by the provider, not the one typed', async () => {
+      const provider: StockProvider = { ...fakeProvider().provider, getDetails: async () => ({ symbol: 'BRK.B' }) };
+      const service = createStockService({ api: provider, local: provider });
+      expect((await service.lookup('brk.b', 'api')).symbol).toBe('BRK.B');
+    });
+
+    it('rejects blank symbols before touching a provider', async () => {
+      const api = fakeProvider();
+      const service = createStockService({ api: api.provider, local: fakeProvider().provider });
+      await expect(service.lookup('   ', 'api')).rejects.toBeInstanceOf(InvalidSymbolError);
+      expect(api.getDetails).not.toHaveBeenCalled();
+    });
+
+    it('propagates provider failures', async () => {
+      const failing: StockProvider = {
+        ...fakeProvider().provider,
+        getDetails: async () => {
+          throw new Error('boom');
+        },
+      };
+      const service = createStockService({ api: failing, local: failing });
+      await expect(service.lookup('V', 'api')).rejects.toThrow('boom');
+    });
   });
 
-  it('returns a null history for providers without price data', async () => {
-    const api = fakeProvider(false);
-    const service = createStockService({ api: api.provider, local: fakeProvider().provider });
+  describe('performance', () => {
+    it('calls historic and high/low for the symbol and period and summarises them', async () => {
+      const api = fakeProvider();
+      const service = createStockService({ api: api.provider, local: fakeProvider().provider }, { formatLabel: (d) => d });
 
-    const result = await service.lookup('aapl', 'api');
+      const result = await service.performance('nflx', 'WEEK', 'api');
 
-    expect(api.getDetails).toHaveBeenCalledWith('AAPL');
-    expect(result).toEqual({ symbol: 'AAPL', details: { symbol: 'AAPL', displayName: 'AAPL Inc.' }, history: null });
-  });
+      expect(api.getPriceSeries).toHaveBeenCalledWith('NFLX', 'WEEK');
+      expect(api.getHighLow).toHaveBeenCalledWith('NFLX', 'WEEK');
+      expect(api.getDetails).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        symbol: 'NFLX',
+        period: 'WEEK',
+        latestPrice: 110,
+        changePercent: 10,
+        high: { price: 112 },
+        low: { price: 98 },
+      });
+      expect(result.points).toHaveLength(2);
+    });
 
-  it('uses the symbol reported by the provider, not the one typed', async () => {
-    const provider: StockProvider = { getDetails: async () => ({ symbol: 'BRK.B' }) };
-    const service = createStockService({ api: provider, local: provider });
-    expect((await service.lookup('brk.b', 'api')).symbol).toBe('BRK.B');
-  });
+    it('rejects blank symbols and propagates failures from either call', async () => {
+      const api = fakeProvider();
+      api.getHighLow.mockRejectedValue(new Error('highlow down'));
+      const service = createStockService({ api: api.provider, local: fakeProvider().provider });
 
-  it('rejects blank symbols before touching a provider', async () => {
-    const api = fakeProvider();
-    const service = createStockService({ api: api.provider, local: fakeProvider().provider });
-    await expect(service.lookup('   ', 'api')).rejects.toBeInstanceOf(InvalidSymbolError);
-    expect(api.getDetails).not.toHaveBeenCalled();
-  });
-
-  it('propagates provider failures', async () => {
-    const failing: StockProvider = {
-      getDetails: async () => {
-        throw new Error('boom');
-      },
-    };
-    const service = createStockService({ api: failing, local: failing });
-    await expect(service.lookup('V', 'api')).rejects.toThrow('boom');
+      await expect(service.performance(' ', 'DAY', 'api')).rejects.toBeInstanceOf(InvalidSymbolError);
+      await expect(service.performance('NFLX', 'DAY', 'api')).rejects.toThrow('highlow down');
+    });
   });
 });

@@ -3,16 +3,21 @@ import { Box, Paper, Typography, useTheme } from '@mui/material';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import { computePriceChartLayout, type PriceChartLayout } from '../charts/priceChartLayout.ts';
 import { useElementWidth } from '../hooks/useElementWidth.ts';
-import type { HourlyPrice } from '../types/stock.ts';
+import type { TrendPoint } from '../types/stock.ts';
+import { formatPrice } from '../utils/format.ts';
 
 export interface PriceChartProps {
-  history: HourlyPrice[];
+  history: TrendPoint[];
   /** Fixed pixel width. When omitted the chart measures and fills its container. */
   width?: number;
   /** Pixel height of the SVG. */
   height?: number;
   title?: string;
+  /** ISO-4217 code used to format prices; defaults to USD. */
+  currency?: string;
 }
+
+export const DEFAULT_CHART_TITLE = 'Price Trend';
 
 export const DEFAULT_CHART_WIDTH = 800;
 export const DEFAULT_CHART_HEIGHT = 280;
@@ -21,10 +26,6 @@ const POINT_RADIUS = 3;
 const ACTIVE_POINT_RADIUS = 5;
 const TOOLTIP_WIDTH = 150;
 const TOOLTIP_HEIGHT = 40;
-
-function formatPrice(price: number): string {
-  return `$${price.toFixed(2)}`;
-}
 
 /** Position the tooltip above the point, flipping/clamping so it stays inside the plot. */
 function tooltipPosition(layout: PriceChartLayout, x: number, y: number) {
@@ -40,7 +41,8 @@ export default function PriceChart({
   history,
   width: fixedWidth,
   height = DEFAULT_CHART_HEIGHT,
-  title = '24-Hour Price Trend',
+  title = DEFAULT_CHART_TITLE,
+  currency,
 }: PriceChartProps) {
   const theme = useTheme();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -92,7 +94,7 @@ export default function PriceChart({
               height={height}
               style={{ display: 'block', overflow: 'visible' }}
               role="img"
-              aria-label={`${title}: ${points.length} hourly price points`}
+              aria-label={`${title}: ${points.length} price points`}
               data-testid="price-chart"
               data-direction={layout.direction}
               onMouseLeave={() => setActiveIndex(null)}
@@ -109,7 +111,7 @@ export default function PriceChart({
                 <g key={`y-${tick.value}`} data-testid="y-tick">
                   <line x1={plot.left} x2={plot.right} y1={tick.y} y2={tick.y} stroke={gridColor} strokeDasharray="4 4" />
                   <text x={plot.left - 8} y={tick.y} dy="0.35em" textAnchor="end" fontSize={11} fill={textColor}>
-                    {formatPrice(tick.value)}
+                    {formatPrice(tick.value, currency)}
                   </text>
                 </g>
               ))}
@@ -168,7 +170,7 @@ export default function PriceChart({
                     data-testid="price-point"
                     data-trend={p.trend}
                   >
-                    <title>{`${p.hour}: ${formatPrice(p.price)}`}</title>
+                    <title>{`${p.label}: ${formatPrice(p.price, currency)}`}</title>
                   </circle>
                 </g>
               ))}
@@ -191,10 +193,10 @@ export default function PriceChart({
                           stroke={gridColor}
                         />
                         <text x={tx + 8} y={ty + 16} fontSize={11} fill={textColor}>
-                          {active.hour}
+                          {active.label}
                         </text>
                         <text x={tx + 8} y={ty + 32} fontSize={13} fontWeight="bold" fill={theme.palette.text.primary}>
-                          {formatPrice(active.price)}
+                          {formatPrice(active.price, currency)}
                         </text>
                       </>
                     );

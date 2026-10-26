@@ -1,8 +1,13 @@
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Paper, Typography } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
-import type { PerformancePeriod } from '../types/performance.ts';
-import type { PriceHistory, StockDetails } from '../types/stock.ts';
+import DownloadIcon from '@mui/icons-material/Download';
+import type { LookupError } from '../errors/lookupError.ts';
+import { performancePeriodLabel, type PerformancePeriod } from '../types/performance.ts';
+import type { PastPerformance, StockDetails } from '../types/stock.ts';
+import { describeInterval } from '../utils/format.ts';
 import { LAYOUT } from '../layout.ts';
+import ErrorBanner from './ErrorBanner.tsx';
+import LoadingIndicator from './LoadingIndicator.tsx';
 import PeriodSelector from './PeriodSelector.tsx';
 import PriceChart from './PriceChart.tsx';
 import HourlyPriceTable from './HourlyPriceTable.tsx';
@@ -10,26 +15,41 @@ import StockSummaryCards from './StockSummaryCards.tsx';
 
 export interface PastPerformanceSectionProps {
   details: StockDetails;
-  /** Price history for the selected period; `null` until a source provides it. */
-  history: PriceHistory | null;
   period: PerformancePeriod;
   onPeriodChange: (period: PerformancePeriod) => void;
+  /** Requests historic + high/low data for `details.symbol` over `period`. */
+  onFetch: () => void;
+  /** Loaded performance, if any. May be for a different period than the one selected. */
+  performance: PastPerformance | null;
+  loading: boolean;
+  /** Period of the in-flight request, shown in the loading indicator. */
+  pendingPeriod?: PerformancePeriod | null;
+  error: LookupError | null;
 }
 
 export const PAST_PERFORMANCE_HEADING_ID = 'past-performance-heading';
 
 /**
- * "Past Performance": a period selector above the price chart and hourly table.
- * No data source supplies history yet, so the chart and table render their empty
- * states; the summary tiles beside the chart appear only once history exists.
+ * "Past Performance": a period selector and Fetch button; once data is loaded, the
+ * summary tiles (latest price, high, low) beside the price chart, and the interval table.
+ * Until the first fetch the chart and table render their empty states.
  */
 export default function PastPerformanceSection({
   details,
-  history,
   period,
   onPeriodChange,
+  onFetch,
+  performance,
+  loading,
+  pendingPeriod,
+  error,
 }: PastPerformanceSectionProps) {
-  const hourly = history?.hourly ?? [];
+  const points = performance?.points ?? [];
+  const loadedLabel = performance ? `Past ${performancePeriodLabel(performance.period)}` : null;
+  const chartTitle = loadedLabel ? `Price Trend — ${loadedLabel}` : 'Price Trend';
+  const tableTitle = loadedLabel
+    ? `Price Intervals — ${loadedLabel}${performance?.interval ? ` (${describeInterval(performance.interval)})` : ''}`
+    : 'Price Intervals';
 
   return (
     <Box
@@ -54,29 +74,58 @@ export default function PastPerformanceSection({
             Past Performance
           </Typography>
         </Box>
-        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} />
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={loading ? undefined : <DownloadIcon />}
+          disabled={loading}
+          onClick={onFetch}
+          aria-label="Fetch"
+          sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 88 }}
+          data-testid="fetch-performance"
+        >
+          {loading ? <CircularProgress size={18} color="inherit" /> : 'Fetch'}
+        </Button>
       </Paper>
 
-      <Box
-        data-testid="overview-row"
-        sx={{
-          display: 'flex',
-          gap: 2,
-          alignItems: 'stretch',
-          flexDirection: { xs: 'column', md: 'row' },
-        }}
-      >
-        {history && (
-          <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
-            <StockSummaryCards history={history} currency={details.currency} />
-          </Box>
-        )}
-        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <PriceChart history={hourly} />
-        </Box>
-      </Box>
+      {error && <ErrorBanner error={error} />}
 
-      <HourlyPriceTable history={hourly} />
+      {loading && (
+        <LoadingIndicator
+          symbol={details.symbol}
+          subject="past performance"
+          caption={`Retrieving historic prices and high/low for the past ${
+            pendingPeriod ? performancePeriodLabel(pendingPeriod).toLowerCase() : 'period'
+          }`}
+          py={3}
+        />
+      )}
+
+      {!loading && (
+        <>
+          <Box
+            data-testid="overview-row"
+            sx={{
+              display: 'flex',
+              gap: 2,
+              alignItems: 'stretch',
+              flexDirection: { xs: 'column', md: 'row' },
+            }}
+          >
+            {performance && (
+              <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
+                <StockSummaryCards performance={performance} currency={details.currency} />
+              </Box>
+            )}
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <PriceChart history={points} title={chartTitle} currency={details.currency} />
+            </Box>
+          </Box>
+
+          <HourlyPriceTable history={points} title={tableTitle} currency={details.currency} />
+        </>
+      )}
     </Box>
   );
 }

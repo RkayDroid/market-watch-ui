@@ -1,4 +1,4 @@
-import type { HourlyPrice, PriceHistory, PriceRecord, StockData, StockDetails, Trend } from '../types/stock.ts';
+import type { HighLow, PastPerformance, PriceRecord, PriceSeries, Trend, TrendPoint } from '../types/stock.ts';
 
 /** Direction of `current` relative to `previous`. The first point has no previous → neutral. */
 export function computeTrend(current: number, previous: number | undefined): Trend {
@@ -12,13 +12,20 @@ export function computeChangePercent(start: number, end: number): number {
   return parseFloat((((end - start) / start) * 100).toFixed(2));
 }
 
-export interface HourLabelOptions {
+export interface LabelOptions {
   locale?: string | string[];
   timeZone?: string;
 }
 
-/** Formats an ISO timestamp as e.g. "Oct 21, 03:00 PM" (locale dependent). */
-export function formatHourLabel(isoDate: string, options: HourLabelOptions = {}): string {
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True for a bare `YYYY-MM-DD` date (daily and coarser samples), false for a full timestamp. */
+export function isBareDate(value: string): boolean {
+  return BARE_DATE.test(value);
+}
+
+/** Formats a full ISO timestamp as e.g. "Oct 21, 03:00 PM" (locale dependent). */
+export function formatHourLabel(isoDate: string, options: LabelOptions = {}): string {
   return new Date(isoDate).toLocaleTimeString(options.locale, {
     hour: '2-digit',
     minute: '2-digit',
@@ -28,52 +35,60 @@ export function formatHourLabel(isoDate: string, options: HourLabelOptions = {})
   });
 }
 
-export type HourLabelFormatter = (isoDate: string) => string;
+/**
+ * Formats a sample timestamp for display. Full timestamps become "Oct 21, 03:00 PM";
+ * bare dates become "Oct 21, 2026" and are rendered as calendar dates (in UTC) so they
+ * never shift by a day in western time zones.
+ */
+export function formatPointLabel(date: string, options: LabelOptions = {}): string {
+  if (!isBareDate(date)) return formatHourLabel(date, options);
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(options.locale, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
 
-/** Converts raw records into table rows with per-hour trend indicators. */
-export function buildHourlyHistory(
+export type LabelFormatter = (date: string) => string;
+
+/** Converts raw records into chart/table points with per-sample trend indicators. */
+export function buildTrendPoints(
   records: readonly PriceRecord[],
-  formatLabel: HourLabelFormatter = formatHourLabel,
-): HourlyPrice[] {
+  formatLabel: LabelFormatter = formatPointLabel,
+): TrendPoint[] {
   return records.map((record, index) => ({
-    hour: formatLabel(record.date),
+    label: formatLabel(record.date),
     price: record.rate,
     trend: computeTrend(record.rate, records[index - 1]?.rate),
   }));
 }
 
 /**
- * Derives {@link PriceHistory} from a chronological price series, or `null` when
- * the series is empty (the data source has no historic prices for the symbol).
+ * Combines the `/historic` series and the `/highlow` figures for one period into the
+ * {@link PastPerformance} view model. Both are for the same symbol and period by
+ * construction (the providers validate that against the request).
  */
-export function summarizePriceHistory(
-  records: readonly PriceRecord[],
-  formatLabel?: HourLabelFormatter,
-): PriceHistory | null {
-  if (records.length === 0) return null;
-
-  const rates = records.map((r) => r.rate);
-  const startPrice = rates[0];
-  const endPrice = rates[rates.length - 1];
+export function summarizePerformance(
+  series: PriceSeries,
+  highLow: HighLow,
+  formatLabel?: LabelFormatter,
+): PastPerformance {
+  if (series.records.length === 0) {
+    throw new Error(`No price history available for ${series.symbol}.`);
+  }
+  const first = series.records[0].rate;
+  const last = series.records[series.records.length - 1].rate;
 
   return {
-    currentPrice: endPrice,
-    highPrice: Math.max(...rates),
-    lowPrice: Math.min(...rates),
-    changePercent: computeChangePercent(startPrice, endPrice),
-    hourly: buildHourlyHistory(records, formatLabel),
-  };
-}
-
-/** Combines reference data with the (possibly empty) price series into the {@link StockData} view model. */
-export function buildStockData(
-  details: StockDetails,
-  records: readonly PriceRecord[],
-  formatLabel?: HourLabelFormatter,
-): StockData {
-  return {
-    symbol: details.symbol,
-    details,
-    history: summarizePriceHistory(records, formatLabel),
+    symbol: series.symbol,
+    period: series.period,
+    interval: series.interval,
+    latestPrice: last,
+    changePercent: computeChangePercent(first, last),
+    points: buildTrendPoints(series.records, formatLabel),
+    high: highLow.high,
+    low: highLow.low,
   };
 }

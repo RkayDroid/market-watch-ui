@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { HighLow, PriceSeries } from '../types/stock.ts';
 import {
-  buildHourlyHistory,
-  buildStockData,
+  buildTrendPoints,
   computeChangePercent,
   computeTrend,
   formatHourLabel,
-  summarizePriceHistory,
+  formatPointLabel,
+  isBareDate,
+  summarizePerformance,
 } from './stockAnalytics.ts';
 
 describe('computeTrend', () => {
@@ -30,15 +32,41 @@ describe('computeChangePercent', () => {
   });
 });
 
+describe('isBareDate', () => {
+  it('distinguishes bare dates from timestamps', () => {
+    expect(isBareDate('2026-10-19')).toBe(true);
+    expect(isBareDate('2026-10-22T09:30:00-04:00')).toBe(false);
+    expect(isBareDate('2026-10-19T00:00:00Z')).toBe(false);
+  });
+});
+
 describe('formatHourLabel', () => {
   it('formats with explicit locale and time zone', () => {
     expect(formatHourLabel('2026-10-21T15:00:00Z', { locale: 'en-US', timeZone: 'UTC' })).toBe(
       'Oct 21, 03:00 PM',
     );
   });
+
+  it('honours the API offset when rendered in that zone', () => {
+    expect(formatHourLabel('2026-10-22T09:30:00-04:00', { locale: 'en-US', timeZone: 'America/New_York' })).toBe(
+      'Oct 22, 09:30 AM',
+    );
+  });
 });
 
-describe('buildHourlyHistory', () => {
+describe('formatPointLabel', () => {
+  it('formats full timestamps like formatHourLabel', () => {
+    expect(formatPointLabel('2026-10-21T15:00:00Z', { locale: 'en-US', timeZone: 'UTC' })).toBe('Oct 21, 03:00 PM');
+  });
+
+  it('formats bare dates as calendar dates, unaffected by the display time zone', () => {
+    for (const timeZone of ['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati']) {
+      expect(formatPointLabel('2026-10-19', { locale: 'en-US', timeZone })).toBe('Oct 19, 2026');
+    }
+  });
+});
+
+describe('buildTrendPoints', () => {
   const records = [
     { date: '2026-10-21T15:00:00Z', rate: 10 },
     { date: '2026-10-21T16:00:00Z', rate: 12 },
@@ -46,51 +74,55 @@ describe('buildHourlyHistory', () => {
     { date: '2026-10-21T18:00:00Z', rate: 9 },
   ];
 
-  it('labels each point and assigns trends relative to the previous hour', () => {
-    expect(buildHourlyHistory(records, (d) => d)).toEqual([
-      { hour: '2026-10-21T15:00:00Z', price: 10, trend: 'neutral' },
-      { hour: '2026-10-21T16:00:00Z', price: 12, trend: 'up' },
-      { hour: '2026-10-21T17:00:00Z', price: 12, trend: 'neutral' },
-      { hour: '2026-10-21T18:00:00Z', price: 9, trend: 'down' },
+  it('labels each point and assigns trends relative to the previous sample', () => {
+    expect(buildTrendPoints(records, (d) => d)).toEqual([
+      { label: '2026-10-21T15:00:00Z', price: 10, trend: 'neutral' },
+      { label: '2026-10-21T16:00:00Z', price: 12, trend: 'up' },
+      { label: '2026-10-21T17:00:00Z', price: 12, trend: 'neutral' },
+      { label: '2026-10-21T18:00:00Z', price: 9, trend: 'down' },
     ]);
   });
+
+  it('uses the bare-date-aware formatter by default', () => {
+    const [point] = buildTrendPoints([{ date: '2026-10-19', rate: 1 }]);
+    expect(point.label).toMatch(/Oct 19, 2026/);
+  });
 });
 
-describe('summarizePriceHistory', () => {
-  const series = [
-    { date: '2026-10-21T15:00:00Z', rate: 275.2 },
-    { date: '2026-10-21T16:00:00Z', rate: 274.8 },
-    { date: '2026-10-21T17:00:00Z', rate: 282.5 },
-  ];
+describe('summarizePerformance', () => {
+  const series: PriceSeries = {
+    symbol: 'V',
+    period: 'WEEK',
+    interval: '1d',
+    records: [
+      { date: '2026-10-19', rate: 275.2 },
+      { date: '2026-10-20', rate: 274.8 },
+      { date: '2026-10-21', rate: 282.5 },
+    ],
+  };
+  const highLow: HighLow = {
+    symbol: 'V',
+    period: 'WEEK',
+    high: { price: 283.1, occurredAt: '2026-10-21' },
+    low: { price: 270.4, occurredAt: '2026-10-20' },
+  };
 
-  it('computes the derived figures and hourly rows', () => {
-    const history = summarizePriceHistory(series, (d) => d);
-    expect(history).toMatchObject({
-      currentPrice: 282.5,
-      highPrice: 282.5,
-      lowPrice: 274.8,
+  it('combines the series and high/low into the view model', () => {
+    const perf = summarizePerformance(series, highLow, (d) => d);
+    expect(perf).toMatchObject({
+      symbol: 'V',
+      period: 'WEEK',
+      interval: '1d',
+      latestPrice: 282.5,
       changePercent: 2.65,
+      high: { price: 283.1, occurredAt: '2026-10-21' },
+      low: { price: 270.4, occurredAt: '2026-10-20' },
     });
-    expect(history?.hourly.map((h) => h.trend)).toEqual(['neutral', 'down', 'up']);
+    expect(perf.points.map((p) => p.trend)).toEqual(['neutral', 'down', 'up']);
+    expect(perf.points[0].label).toBe('2026-10-19');
   });
 
-  it('is null for an empty series', () => {
-    expect(summarizePriceHistory([])).toBeNull();
-  });
-});
-
-describe('buildStockData', () => {
-  const details = { symbol: 'V', displayName: 'Visa', currency: 'USD' };
-
-  it('combines details with a summarised history', () => {
-    const stock = buildStockData(details, [{ date: '2026-10-21T15:00:00Z', rate: 275.2 }], (d) => d);
-    expect(stock.symbol).toBe('V');
-    expect(stock.details).toBe(details);
-    expect(stock.history).toMatchObject({ currentPrice: 275.2, changePercent: 0 });
-    expect(stock.history?.hourly).toEqual([{ hour: '2026-10-21T15:00:00Z', price: 275.2, trend: 'neutral' }]);
-  });
-
-  it('yields a null history when the source has no prices', () => {
-    expect(buildStockData(details, [])).toEqual({ symbol: 'V', details, history: null });
+  it('rejects an empty series', () => {
+    expect(() => summarizePerformance({ ...series, records: [] }, highLow)).toThrow(/No price history available for V/);
   });
 });
