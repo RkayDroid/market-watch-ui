@@ -1,4 +1,4 @@
-Market Watch UI — cumulative change set vs. the original baseline (rounds 1 + 2 + 3)
+Market Watch UI — cumulative change set vs. the original baseline (rounds 1–4)
 Unzip over the project root (market-watch-ui/), overwriting files, then DELETE the files below.
 
 === DELETE these files locally (if present) ===
@@ -97,6 +97,7 @@ src/components/StockDetailCards.tsx
 src/components/StockSummaryCards.test.tsx
 src/components/StockSummaryCards.tsx
 src/components/Tile.tsx
+src/components/embedded.ts
 src/config/liveApiConfig.ts
 src/data/highLow.test.ts
 src/data/highLow.ts

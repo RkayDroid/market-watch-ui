@@ -5,6 +5,7 @@ import { computePriceChartLayout, type PriceChartLayout } from '../charts/priceC
 import { useElementWidth } from '../hooks/useElementWidth.ts';
 import type { TrendPoint } from '../types/stock.ts';
 import { formatPrice } from '../utils/format.ts';
+import { EMBEDDED_PAPER_SX } from './embedded.ts';
 
 export interface PriceChartProps {
   history: TrendPoint[];
@@ -15,6 +16,8 @@ export interface PriceChartProps {
   title?: string;
   /** ISO-4217 code used to format prices; defaults to USD. */
   currency?: string;
+  /** Render without its own border/background, for use inside a grouped panel. */
+  embedded?: boolean;
 }
 
 export const DEFAULT_CHART_TITLE = 'Price Trend';
@@ -43,6 +46,7 @@ export default function PriceChart({
   height = DEFAULT_CHART_HEIGHT,
   title = DEFAULT_CHART_TITLE,
   currency,
+  embedded = false,
 }: PriceChartProps) {
   const theme = useTheme();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -65,7 +69,10 @@ export default function PriceChart({
   const active = activeIndex !== null ? points[activeIndex] : undefined;
 
   return (
-    <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Paper
+      sx={{ height: '100%', display: 'flex', flexDirection: 'column', ...(embedded ? EMBEDDED_PAPER_SX : {}) }}
+      data-testid="price-chart-panel"
+    >
       <Box
         sx={{
           px: 1.5,

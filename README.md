@@ -105,14 +105,15 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   fields: Symbol, Company (display name + long name), Full-day Price (formatted in the stock's currency),
   Sector, Exchange (code + name for known codes), Market (humanised), Currency and Language (code + name
   via `Intl.DisplayNames`). Tiles for absent fields are not rendered.
-- **Past Performance** — a section beneath the tiles with a header row: title, period radio group
+- **Past Performance** — a single panel beneath the tiles. Its header bar holds the title, period radio group
   (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups)
   and a **Fetch** button. Fetch calls `/historic` and `/highlow` together for the loaded symbol, the
   selected period and the source the symbol was loaded from, with its own loading indicator and error
-  banner inside the section. Results render as: Latest Price (with change over the period) plus High
+  banner inside the panel. Results render as: Latest Price (with change over the period) plus High
   and Low tiles (with when they occurred) in a 15% column beside the price chart (fixed 280px height,
-  container-measured via `useElementWidth`), and the dense interval table below — titled by the loaded
-  period and sampling interval (e.g. "Past Week (daily)"). Before the first fetch the chart and table
+  container-measured via `useElementWidth`), then a divider and the dense interval table — titled by
+  the loaded period and sampling interval (e.g. "Past Week (daily)"). The chart and table are rendered
+  `embedded` (no border of their own) so the group reads as one unit. Before the first fetch they
   render empty; looking up another symbol clears the results. Stacks vertically on small screens.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even

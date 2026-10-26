@@ -13,12 +13,15 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import type { TrendPoint } from '../types/stock.ts';
 import { DEFAULT_CURRENCY, formatPrice } from '../utils/format.ts';
 import TrendIndicator from './TrendIndicator.tsx';
+import { EMBEDDED_PAPER_SX } from './embedded.ts';
 
 interface HourlyPriceTableProps {
   history: TrendPoint[];
   title?: string;
   /** ISO-4217 code used to format prices; defaults to USD. */
   currency?: string;
+  /** Render without its own border/background, for use inside a grouped panel. */
+  embedded?: boolean;
 }
 
 export const DEFAULT_TABLE_TITLE = 'Price Intervals';
@@ -28,9 +31,10 @@ export default function HourlyPriceTable({
   history,
   title = DEFAULT_TABLE_TITLE,
   currency = DEFAULT_CURRENCY,
+  embedded = false,
 }: HourlyPriceTableProps) {
   return (
-    <Paper>
+    <Paper sx={embedded ? EMBEDDED_PAPER_SX : undefined} data-testid="price-table-panel">
       <Box
         sx={{
           px: 1.5,

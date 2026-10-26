@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Paper, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Divider, Paper, Typography } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import DownloadIcon from '@mui/icons-material/Download';
 import type { LookupError } from '../errors/lookupError.ts';
@@ -30,8 +30,8 @@ export interface PastPerformanceSectionProps {
 export const PAST_PERFORMANCE_HEADING_ID = 'past-performance-heading';
 
 /**
- * "Past Performance": a period selector and Fetch button; once data is loaded, the
- * summary tiles (latest price, high, low) beside the price chart, and the interval table.
+ * "Past Performance" as one panel: a header bar (title, period selector, Fetch), then —
+ * separated by dividers — the summary tiles beside the price chart, and the interval table.
  * Until the first fetch the chart and table render their empty states.
  */
 export default function PastPerformanceSection({
@@ -52,13 +52,13 @@ export default function PastPerformanceSection({
     : 'Price Intervals';
 
   return (
-    <Box
+    <Paper
       component="section"
       aria-labelledby={PAST_PERFORMANCE_HEADING_ID}
       data-testid="past-performance"
-      sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+      sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      <Paper
+      <Box
         sx={{
           px: 2,
           py: 1,
@@ -66,6 +66,7 @@ export default function PastPerformanceSection({
           alignItems: 'center',
           gap: 2,
           flexWrap: 'wrap',
+          bgcolor: 'action.hover',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto' }}>
@@ -87,28 +88,34 @@ export default function PastPerformanceSection({
         >
           {loading ? <CircularProgress size={18} color="inherit" /> : 'Fetch'}
         </Button>
-      </Paper>
+      </Box>
+      <Divider />
 
-      {error && <ErrorBanner error={error} />}
-
-      {loading && (
-        <LoadingIndicator
-          symbol={details.symbol}
-          subject="past performance"
-          caption={`Retrieving historic prices and high/low for the past ${
-            pendingPeriod ? performancePeriodLabel(pendingPeriod).toLowerCase() : 'period'
-          }`}
-          py={3}
-        />
+      {error && (
+        <Box sx={{ p: 2, pb: 0 }}>
+          <ErrorBanner error={error} />
+        </Box>
       )}
 
-      {!loading && (
+      {loading ? (
+        <Box sx={{ p: 2 }}>
+          <LoadingIndicator
+            symbol={details.symbol}
+            subject="past performance"
+            caption={`Retrieving historic prices and high/low for the past ${
+              pendingPeriod ? performancePeriodLabel(pendingPeriod).toLowerCase() : 'period'
+            }`}
+            py={3}
+          />
+        </Box>
+      ) : (
         <>
           <Box
             data-testid="overview-row"
             sx={{
               display: 'flex',
               gap: 2,
+              p: 2,
               alignItems: 'stretch',
               flexDirection: { xs: 'column', md: 'row' },
             }}
@@ -119,13 +126,13 @@ export default function PastPerformanceSection({
               </Box>
             )}
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <PriceChart history={points} title={chartTitle} currency={details.currency} />
+              <PriceChart history={points} title={chartTitle} currency={details.currency} embedded />
             </Box>
           </Box>
-
-          <HourlyPriceTable history={points} title={tableTitle} currency={details.currency} />
+          <Divider />
+          <HourlyPriceTable history={points} title={tableTitle} currency={details.currency} embedded />
         </>
       )}
-    </Box>
+    </Paper>
   );
 }
