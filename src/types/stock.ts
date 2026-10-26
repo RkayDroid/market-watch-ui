@@ -1,10 +1,10 @@
 /** Direction of an hourly price move relative to the previous hour. */
 export type Trend = 'up' | 'down' | 'neutral';
 
-/** Where stock data is sourced from. */
-export type DataSource = 'api' | 'file';
+/** Where stock data is sourced from: the live API, or the offline JSON fixtures under `public/data`. */
+export type DataSource = 'api' | 'local';
 
-export const DATA_SOURCES: readonly DataSource[] = ['api', 'file'];
+export const DATA_SOURCES: readonly DataSource[] = ['api', 'local'];
 
 export function isDataSource(value: string): value is DataSource {
   return (DATA_SOURCES as readonly string[]).includes(value);
@@ -16,9 +16,6 @@ export interface PriceRecord {
   date: string;
   rate: number;
 }
-
-/** Price records keyed by (upper-cased) ticker symbol. */
-export type PriceTable = Record<string, PriceRecord[]>;
 
 /**
  * Reference data about a listed stock, as returned by `GET /stock/{symbol}`.
@@ -65,6 +62,10 @@ export interface PriceHistory {
 export interface StockData {
   symbol: string;
   details: StockDetails;
-  /** `null` when the data source has no historic prices for the symbol. */
+  /**
+   * `null` when the data source has no historic prices for the symbol.
+   * Currently always `null`: no source provides history yet, so the chart and
+   * table in the "Past Performance" section render empty.
+   */
   history: PriceHistory | null;
 }

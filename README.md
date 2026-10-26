@@ -1,8 +1,8 @@
 # Market Watch UI (lite)
 
 A small React + TypeScript + Vite app that looks up a stock symbol and shows its reference
-data (company, sector, exchange, market, currency, …) plus — when the data source has it — a
-24-hour hourly price breakdown with trend indicators.
+data (company, sector, exchange, market, currency, …) plus a "Past Performance" section with a
+period selector, price chart and hourly table (the latter two await a history data source).
 
 ## Scripts
 
@@ -17,38 +17,18 @@ data (company, sector, exchange, market, currency, …) plus — when the data s
 
 ## Data sources
 
-Every lookup resolves two things through a `StockProvider`: **details** (the `GET /stock/{symbol}`
-payload — always required) and an optional **hourly price history**. Sources that have no history
-simply omit it; the UI then shows the detail tiles and a short notice instead of the chart and table.
+Every lookup resolves a symbol's **details** (the `GET /stock/{symbol}` payload) through a
+`StockProvider`. Providers may also expose an optional hourly **price history**; none does yet,
+so the chart and table in the "Past Performance" section currently render their empty states.
 
-### Local files (offline mode)
+### Local JSON (offline mode)
 
-The **Local Flat File (CSV)** option is the offline mode. It reads two kinds of file from `public/`,
-which Vite serves verbatim, so editing them does not require a rebuild:
-
-- [`public/local-data.csv`](public/local-data.csv) — hourly prices (fetched lazily on the first
-  lookup and cached for the lifetime of the page).
-- [`public/data/detail-{SYMBOL}.json`](public/data) — stock details, in exactly the shape the live
-  API returns. These are copies of the live responses captured in [`json/`](json) (`detail-AAPL.json`,
-  `detail-GOOG.json`, `detail-META.json`); a test (`src/data/localDetails.test.ts`) keeps the two in sync.
-
-The two files need not cover the same symbols. A symbol in both (`AAPL`, `GOOG`, `META`) gets the
-full screen; one only in the CSV (`NFLX`, `V`) gets the symbol tile plus the chart and table; one only
-in a detail file gets the detail tiles plus the "no historic prices" notice. A symbol in neither shows
-an error listing the CSV's symbols.
-
-CSV format (one row per observation, header required, column order irrelevant):
-
-```csv
-symbol,date,rate
-AAPL,2026-10-21T15:00:00Z,220.10
-```
-
-| Column   | Type                 | Notes                                   |
-| -------- | -------------------- | --------------------------------------- |
-| `symbol` | string               | Case-insensitive; normalised to upper   |
-| `date`   | ISO-8601 timestamp   | Rows are sorted chronologically on load |
-| `rate`   | number               | Price in USD                            |
+The **Local JSON (offline)** option reads [`public/data/detail-{SYMBOL}.json`](public/data) — stock
+details in exactly the shape the live API returns. They are copies of the live responses captured in
+[`json/`](json) (`detail-AAPL.json`, `detail-GOOG.json`, `detail-META.json`); Vite serves them verbatim,
+so editing them needs no rebuild. To add a symbol, drop in `detail-{SYMBOL}.json` and add the symbol to
+`OFFLINE_SYMBOLS` in `src/data/providers/LocalStockProvider.ts` (used for the suggestion chips on a
+miss); `src/data/localDetails.test.ts` checks that the folder, the list and the captures agree.
 
 ### Live API
 
@@ -74,9 +54,10 @@ Authorization: Bearer {VITE_LIVE_API_KEY}        (only when set)
 ```
 
 Only `symbol` (falling back to `ticker`) is mandatory; every other field is optional and gets a tile
-when present. The endpoint carries **no historic prices**, so for this source the chart, hourly table
-and 24h tiles are replaced by an explanatory notice. (The captures in `json/history-*` and
-`json/highlow-*` suggest separate endpoints for those; a provider can add `getPrices` when they land.)
+when present. The endpoint carries **no historic prices**. The captures in `json/history-{SYMBOL}-{PERIOD}`
+and `json/highlow-*` (periods `DAY`, `WEEK`, `MONTH`, `HALF_YEAR`, `YEAR`, `FIVE_YEAR` — the same
+identifiers as the Past Performance selector) suggest separate endpoints; a provider implementing
+`getPrices` is all that is needed for the chart, table and summary tiles to populate.
 
 Transport and contract failures are surfaced as typed `LiveApiError`s (`unreachable`, `timeout`,
 `http`, `malformed`) with user-readable messages.
@@ -102,16 +83,16 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   fields: Symbol, Company (display name + long name), Full-day Price (formatted in the stock's currency),
   Sector, Exchange (code + name for known codes), Market (humanised), Currency and Language (code + name
   via `Intl.DisplayNames`). Tiles for absent fields are not rendered.
-- **Overview row** *(only when the source has history)* — Current Price (with 24h change chip) and 24h
-  High/Low stacked vertically in a 15% column, with the price chart filling the remaining width at a fixed
-  280px height; the chart measures its container (`useElementWidth`) so axis text stays crisp at any width.
-  Stacks vertically on small screens.
-- **Hourly table** *(only when the source has history)* — full width, dense rows (`size="small"` with
-  reduced cell padding). Without history, both it and the overview row are replaced by a one-line notice.
+- **Past Performance** — a section beneath the tiles with a header row (title + period radio group:
+  Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups)
+  followed by the price chart and hourly table. Both are rendered but unpopulated until a provider
+  supplies history; once it does, Current Price (with change chip) and High/Low tiles appear in a 15%
+  column beside the chart (fixed 280px height, container-measured via `useElementWidth`), and the
+  dense hourly table fills the width below. Stacks vertically on small screens.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even
-  the instant local file gives visible feedback. Failures render as a styled `ErrorBanner` with a
-  title, message, remediation hint and — for unknown symbols in the flat file — clickable
+  the instant local source gives visible feedback. Failures render as a styled `ErrorBanner` with a
+  title, message, remediation hint and — for unknown symbols in the offline data — clickable
   suggestion chips that fill the box and re-run the lookup.
 
 Proportions are defined once in `src/layout.ts`. The Vite template's default stylesheet was
@@ -124,34 +105,31 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 | File | What it shows |
 | --- | --- |
 | `00-initial.png` | Empty state; "Find" disabled until a symbol is entered |
-| `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local file) |
-| `AAPL.png`, `GOOG.png`, `META.png` | Local source, symbol in both files: detail tiles + chart + table (`*-overview.png` = lookup, tiles and chart only) |
-| `V.png`, `NFLX.png` | Local source, CSV only: symbol tile + chart + table |
-| `live-META.png` | Live API (`GET /stock/META`, served by a stub): detail tiles and the "no historic prices" notice |
-| `90-not-found.png` | Unknown symbol in the local files, with clickable suggestions |
+| `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
+| `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the Past Performance section (period selector, unpopulated chart and table) |
+| `live-META.png` | Same via the live API (`GET /stock/META`, served by a stub) |
+| `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |
 | `91-live-api-unreachable.png` | Live API selected with no endpoint configured |
 
 ## Architecture
 
 ```
-public/local-data.csv                     flat-file hourly price database (offline history)
 public/data/detail-{SYMBOL}.json          offline stock details (copies of the captures in json/)
 json/                                     raw responses captured from the live API (reference only)
 .env.example                              live API settings template
 src/
   types/stock.ts                          domain types (StockDetails, PriceHistory, StockData)
-  data/csv/parseCsv.ts                    generic CSV tokenizer/parser
-  data/csv/parsePriceRecords.ts           CSV rows -> validated PriceTable
+  types/performance.ts                    Past Performance periods (DAY … FIVE_YEAR), labels, default
   data/stockDetails.ts                    GET /stock/{symbol} payload -> validated StockDetails (shared parser)
   config/liveApiConfig.ts                 env-driven live API settings (URL, key, timeout)
-  data/providers/StockProvider.ts         StockProvider / PriceProvider interfaces, SymbolNotFoundError, LiveApiError
-  data/providers/CsvPriceProvider.ts      file-backed price history (lazy, cached)
-  data/providers/LocalStockProvider.ts    offline StockProvider = detail JSON fixtures + CSV history
+  data/providers/StockProvider.ts         StockProvider interface, SymbolNotFoundError, LiveApiError
+  data/providers/LocalStockProvider.ts    offline StockProvider over the detail JSON fixtures
   data/providers/LiveApiStockProvider.ts  HTTP-backed StockProvider (url builder, response parser, error mapper)
   services/stockAnalytics.ts              pure trend / change% / history summary / StockData assembly
   services/stockService.ts                provider registry -> StockData (details + optional history)
   hooks/useStockLookup.ts                 async state (loading / pendingSymbol / error / data), min loading time
   errors/lookupError.ts                   maps thrown errors to a presentable { title, message, hint, suggestions }
+  utils/symbol.ts                         normalizeSymbol
   utils/timing.ts                         delay, withMinimumDuration
   utils/format.ts                         currency / exchange / market / language display formatters (pure)
   hooks/useElementWidth.ts                ResizeObserver-backed width measurement for the chart
@@ -161,7 +139,8 @@ src/
   charts/paths.ts                         SVG path-string builders (pure)
   charts/priceChartLayout.ts              HourlyPrice[] -> scaled points, ticks, paths (pure)
   components/                             LookupForm, LoadingIndicator, ErrorBanner, Tile, StockDetailCards,
-                                          StockSummaryCards, HistoryUnavailableNotice, PriceChart, HourlyPriceTable, TrendIndicator
+                                          PastPerformanceSection, PeriodSelector, StockSummaryCards,
+                                          PriceChart, HourlyPriceTable, TrendIndicator
   App.tsx                                 composition root (service is injectable for tests)
 ```
 

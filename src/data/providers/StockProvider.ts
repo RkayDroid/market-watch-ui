@@ -1,21 +1,13 @@
 import type { PriceRecord, StockDetails } from '../../types/stock.ts';
 
 /**
- * Abstraction over any source of hourly prices (flat file, future history API, ...).
- * Implementations must return records sorted oldest → newest.
- */
-export interface PriceProvider {
-  /** Resolves price history for a (normalised, upper-case) symbol. */
-  getPrices(symbol: string): Promise<PriceRecord[]>;
-}
-
-/**
- * Abstraction over a source of stock data (live API, local files, ...).
+ * Abstraction over a source of stock data (live API, offline JSON fixtures, ...).
  *
  * Details are mandatory — a source that cannot resolve them must reject with
- * {@link SymbolNotFoundError}. Historic prices are optional: sources with no
- * concept of history (such as the live `GET /stock/{symbol}` endpoint) omit
- * `getPrices`, and sources that have history for only some symbols resolve `[]`.
+ * {@link SymbolNotFoundError}. Historic prices are optional and currently provided
+ * by no source: `GET /stock/{symbol}` carries none, and the history endpoint is not
+ * wired up yet. A provider that gains history implements `getPrices` (records
+ * sorted oldest → newest) and the "Past Performance" chart and table light up.
  */
 export interface StockProvider {
   /** Resolves reference data for a (normalised, upper-case) symbol. */
@@ -25,7 +17,7 @@ export interface StockProvider {
 }
 
 export interface SymbolNotFoundOptions {
-  /** Human-readable description of the source, e.g. "the local data file". */
+  /** Human-readable description of the source, e.g. "the live API". */
   source: string;
   /** Symbols the source does know about, if it can enumerate them. */
   availableSymbols?: readonly string[];

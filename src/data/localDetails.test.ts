@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { OFFLINE_SYMBOLS } from './providers/LocalStockProvider.ts';
 import { parseStockDetails } from './stockDetails.ts';
 
 /**
@@ -18,6 +19,10 @@ describe('public/data/detail-*.json', () => {
   it('ships the captured live responses', () => {
     expect(Object.keys(servedBySymbol).sort()).toEqual(['AAPL', 'GOOG', 'META']);
     expect(Object.keys(servedBySymbol).sort()).toEqual(Object.keys(capturedBySymbol).sort());
+  });
+
+  it('is exactly the list the offline provider suggests on a miss (OFFLINE_SYMBOLS)', () => {
+    expect([...OFFLINE_SYMBOLS].sort()).toEqual(Object.keys(servedBySymbol).sort());
   });
 
   it.each(Object.keys(servedBySymbol))('%s parses, matches its file name and its capture', (symbol) => {

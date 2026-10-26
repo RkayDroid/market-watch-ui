@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App.tsx';
-import LOCAL_CSV from '../public/local-data.csv?raw';
 import detailGoog from '../public/data/detail-GOOG.json';
 
 /** Only the transport is replaced; axios' error helpers stay real so 404 handling is exercised. */
@@ -15,41 +14,38 @@ vi.mock('axios', async (importOriginal) => {
 afterEach(() => vi.restoreAllMocks());
 
 /**
- * Exercises App's real default wiring (CSV provider over HTTP + live API provider),
+ * Exercises App's real default wiring (offline JSON provider over HTTP + live API provider),
  * with only the network layer replaced.
  */
 describe('App (default service wiring)', () => {
-  it('fetches public/local-data.csv and public/data/detail-*.json over HTTP for the flat-file source', async () => {
+  it('fetches public/data/detail-*.json over HTTP for the local source', async () => {
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
-      if (url === '/local-data.csv') return { data: LOCAL_CSV };
       if (url === '/data/detail-GOOG.json') return { data: detailGoog, headers: { 'content-type': 'application/json' } };
       throw new Error(`unexpected request: ${url}`);
     });
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
-    await userEvent.click(screen.getByLabelText(/local flat file/i));
+    await userEvent.click(screen.getByLabelText(/local json/i));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'goog{enter}');
 
     expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('GOOG');
     expect(screen.getByTestId('detail-company')).toHaveTextContent('Alphabet');
-    expect(screen.getByTestId('summary-price')).toBeInTheDocument();
-    expect(axios.get).toHaveBeenCalledWith('/local-data.csv', expect.objectContaining({ responseType: 'text' }));
+    expect(axios.get).toHaveBeenCalledTimes(1);
     expect(axios.get).toHaveBeenCalledWith('/data/detail-GOOG.json', expect.anything());
   });
 
-  it('falls back to CSV-only data when no detail fixture exists for the symbol', async () => {
-    vi.mocked(axios.get).mockImplementation(async (url: string) => {
-      if (url === '/local-data.csv') return { data: LOCAL_CSV };
-      throw new AxiosError('nf', undefined, undefined, undefined, { status: 404 } as AxiosResponse);
-    });
+  it('reports a missing fixture as "not found" with the offline symbols as suggestions', async () => {
+    vi.mocked(axios.get).mockRejectedValue(
+      new AxiosError('nf', undefined, undefined, undefined, { status: 404 } as AxiosResponse),
+    );
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
-    await userEvent.click(screen.getByLabelText(/local flat file/i));
+    await userEvent.click(screen.getByLabelText(/local json/i));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'nflx{enter}');
 
-    expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('NFLX');
-    expect(screen.queryByTestId('detail-company')).not.toBeInTheDocument();
-    expect(screen.getByTestId('summary-price')).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Symbol not found');
+    expect(alert).toHaveTextContent('AAPLGOOGMETA');
   });
 
   it('calls the configured live API base URL for the API source', async () => {

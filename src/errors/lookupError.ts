@@ -7,7 +7,7 @@ export interface LookupError {
   message: string;
   /** Optional remediation advice shown beneath the message. */
   hint?: string;
-  /** Symbols the user could try instead (e.g. from the flat file). */
+  /** Symbols the user could try instead (e.g. the offline fixtures). */
   suggestedSymbols?: readonly string[];
 }
 
@@ -41,7 +41,7 @@ export function toLookupError(err: unknown): LookupError {
       message: err.message,
       hint:
         err.kind === 'unreachable' || err.kind === 'timeout'
-          ? 'Check VITE_LIVE_API_BASE_URL and your network connection, or switch to the local flat file.'
+          ? 'Check VITE_LIVE_API_BASE_URL and your network connection, or switch to the local JSON source.'
           : undefined,
     };
   }

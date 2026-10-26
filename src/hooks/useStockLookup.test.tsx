@@ -33,7 +33,7 @@ describe('useStockLookup', () => {
     expect(result.current).toMatchObject({ data: null, loading: false, pendingSymbol: null, error: null });
 
     act(() => {
-      void result.current.lookup(' v ', 'file');
+      void result.current.lookup(' v ', 'local');
     });
     expect(result.current.loading).toBe(true);
     expect(result.current.pendingSymbol).toBe('V');
@@ -52,11 +52,11 @@ describe('useStockLookup', () => {
     const service: StockService = { lookup: async () => (++call === 1 ? stock('V') : second.promise) };
     const { result } = renderHook(() => useStockLookup(service, instant));
 
-    await act(() => result.current.lookup('V', 'file'));
+    await act(() => result.current.lookup('V', 'local'));
     expect(result.current.data?.symbol).toBe('V');
 
     act(() => {
-      void result.current.lookup('AAPL', 'file');
+      void result.current.lookup('AAPL', 'local');
     });
     expect(result.current.data).toBeNull();
     expect(result.current.loading).toBe(true);
@@ -71,8 +71,8 @@ describe('useStockLookup', () => {
     };
     const { result } = renderHook(() => useStockLookup(service, instant));
 
-    await act(() => result.current.lookup('V', 'file'));
-    await act(() => result.current.lookup('BAD', 'file'));
+    await act(() => result.current.lookup('V', 'local'));
+    await act(() => result.current.lookup('BAD', 'local'));
 
     expect(result.current.error).toMatchObject({ title: 'Lookup failed', message: 'Something specific' });
     expect(result.current.loading).toBe(false);
@@ -85,7 +85,7 @@ describe('useStockLookup', () => {
     const { result } = renderHook(() => useStockLookup(service, { minLoadingMs: 1000 }));
 
     act(() => {
-      void result.current.lookup('V', 'file');
+      void result.current.lookup('V', 'local');
     });
     await act(() => vi.advanceTimersByTimeAsync(900));
     expect(result.current.loading).toBe(true);

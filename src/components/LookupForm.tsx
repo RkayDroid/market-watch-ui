@@ -98,9 +98,9 @@ export default function LookupForm({
               sx={{ mr: 1.5 }}
             />
             <FormControlLabel
-              value="file"
+              value="local"
               control={<Radio size="small" sx={{ py: 0.5 }} />}
-              label="Local Flat File (CSV)"
+              label="Local JSON (offline)"
               slotProps={{ typography: { variant: 'caption' } }}
               sx={{ mr: 0 }}
             />

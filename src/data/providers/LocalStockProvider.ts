@@ -1,13 +1,18 @@
 import axios, { isAxiosError } from 'axios';
-import type { PriceRecord, StockDetails } from '../../types/stock.ts';
+import type { StockDetails } from '../../types/stock.ts';
 import { InvalidStockDetailsError, parseStockDetails } from '../stockDetails.ts';
-import { createDefaultCsvPriceProvider, type CsvPriceProvider } from './CsvPriceProvider.ts';
 import { SymbolNotFoundError, type StockProvider } from './StockProvider.ts';
 
-export const LOCAL_SOURCE_LABEL = 'the local data files';
+export const LOCAL_SOURCE_LABEL = 'the offline data';
 
 /** Directory (relative to the Vite base URL) holding the offline `detail-{SYMBOL}.json` fixtures. */
 export const LOCAL_DETAILS_DIR = 'data';
+
+/**
+ * Symbols with a fixture under `public/data/`. Static hosting cannot list a directory,
+ * so this is maintained by hand and checked against the folder by `localDetails.test.ts`.
+ */
+export const OFFLINE_SYMBOLS: readonly string[] = ['AAPL', 'GOOG', 'META'];
 
 /** Path of the offline details file for a symbol, relative to the Vite base URL. */
 export function localDetailsPath(symbol: string): string {
@@ -41,46 +46,38 @@ export function createHttpDetailsLoader(baseUrl: string): DetailsLoader {
   };
 }
 
+export interface LocalStockProviderOptions {
+  /** Symbols offered as suggestions when a lookup misses; defaults to {@link OFFLINE_SYMBOLS}. */
+  availableSymbols?: readonly string[];
+}
+
 /**
- * Offline {@link StockProvider}: details come from `detail-{SYMBOL}.json` (captured
- * live responses) and hourly history from the CSV price file. The two need not
- * agree on coverage — a symbol present in only one of them still resolves, with
- * bare details or an empty history respectively.
+ * Offline {@link StockProvider}: details come from `detail-{SYMBOL}.json`, copies of
+ * responses captured from the live API. It has no price history.
  */
-export function createLocalStockProvider(csv: CsvPriceProvider, loadDetails: DetailsLoader): StockProvider {
+export function createLocalStockProvider(
+  loadDetails: DetailsLoader,
+  { availableSymbols = OFFLINE_SYMBOLS }: LocalStockProviderOptions = {},
+): StockProvider {
   return {
     async getDetails(symbol: string): Promise<StockDetails> {
       const payload = await loadDetails(symbol);
-      if (payload !== null) {
-        try {
-          return parseStockDetails(payload);
-        } catch (err) {
-          if (err instanceof InvalidStockDetailsError) {
-            throw new Error(`The local details file for ${symbol} is malformed: ${err.reason}.`, { cause: err });
-          }
-          throw err;
-        }
-      }
-
-      const availableSymbols = await csv.listSymbols();
-      if (!availableSymbols.includes(symbol)) {
+      if (payload === null) {
         throw new SymbolNotFoundError(symbol, { source: LOCAL_SOURCE_LABEL, availableSymbols });
       }
-      return { symbol };
-    },
-
-    async getPrices(symbol: string): Promise<PriceRecord[]> {
       try {
-        return await csv.getPrices(symbol);
+        return parseStockDetails(payload);
       } catch (err) {
-        if (err instanceof SymbolNotFoundError) return [];
+        if (err instanceof InvalidStockDetailsError) {
+          throw new Error(`The local details file for ${symbol} is malformed: ${err.reason}.`, { cause: err });
+        }
         throw err;
       }
     },
   };
 }
 
-/** Default offline provider wired to `public/local-data.csv` and `public/data/detail-*.json`. */
+/** Default offline provider wired to `public/data/detail-*.json`. */
 export function createDefaultLocalStockProvider(baseUrl: string = import.meta.env.BASE_URL): StockProvider {
-  return createLocalStockProvider(createDefaultCsvPriceProvider(baseUrl), createHttpDetailsLoader(baseUrl));
+  return createLocalStockProvider(createHttpDetailsLoader(baseUrl));
 }

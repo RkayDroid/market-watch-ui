@@ -34,14 +34,14 @@ describe('LookupForm', () => {
     expect(onSubmit).toHaveBeenCalledWith('aapl', 'api');
   });
 
-  it('submits with the file source when selected', async () => {
+  it('submits with the local source when selected', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
 
-    await userEvent.click(screen.getByLabelText(/local flat file/i));
+    await userEvent.click(screen.getByLabelText(/local json/i));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'META{enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith('META', 'file');
+    expect(onSubmit).toHaveBeenCalledWith('META', 'local');
   });
 
   it('does not submit a blank symbol', async () => {

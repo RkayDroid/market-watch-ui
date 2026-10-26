@@ -1,5 +1,5 @@
 import type { StockProvider } from '../data/providers/StockProvider.ts';
-import { normalizeSymbol } from '../data/csv/parsePriceRecords.ts';
+import { normalizeSymbol } from '../utils/symbol.ts';
 import type { DataSource, StockData } from '../types/stock.ts';
 import { buildStockData, type HourLabelFormatter } from './stockAnalytics.ts';
 

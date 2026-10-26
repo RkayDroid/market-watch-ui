@@ -17,13 +17,13 @@ function fakeProvider(withPrices = true) {
 describe('createStockService', () => {
   it('routes to the provider for the requested source with a normalised symbol', async () => {
     const api = fakeProvider();
-    const file = fakeProvider();
-    const service = createStockService({ api: api.provider, file: file.provider }, { formatLabel: (d) => d });
+    const local = fakeProvider();
+    const service = createStockService({ api: api.provider, local: local.provider }, { formatLabel: (d) => d });
 
-    const result = await service.lookup('  nflx ', 'file');
+    const result = await service.lookup('  nflx ', 'local');
 
-    expect(file.getDetails).toHaveBeenCalledWith('NFLX');
-    expect(file.getPrices).toHaveBeenCalledWith('NFLX');
+    expect(local.getDetails).toHaveBeenCalledWith('NFLX');
+    expect(local.getPrices).toHaveBeenCalledWith('NFLX');
     expect(api.getDetails).not.toHaveBeenCalled();
     expect(result.symbol).toBe('NFLX');
     expect(result.details).toEqual({ symbol: 'NFLX', displayName: 'NFLX Inc.' });
@@ -33,7 +33,7 @@ describe('createStockService', () => {
 
   it('returns a null history for providers without price data', async () => {
     const api = fakeProvider(false);
-    const service = createStockService({ api: api.provider, file: fakeProvider().provider });
+    const service = createStockService({ api: api.provider, local: fakeProvider().provider });
 
     const result = await service.lookup('aapl', 'api');
 
@@ -43,13 +43,13 @@ describe('createStockService', () => {
 
   it('uses the symbol reported by the provider, not the one typed', async () => {
     const provider: StockProvider = { getDetails: async () => ({ symbol: 'BRK.B' }) };
-    const service = createStockService({ api: provider, file: provider });
+    const service = createStockService({ api: provider, local: provider });
     expect((await service.lookup('brk.b', 'api')).symbol).toBe('BRK.B');
   });
 
   it('rejects blank symbols before touching a provider', async () => {
     const api = fakeProvider();
-    const service = createStockService({ api: api.provider, file: fakeProvider().provider });
+    const service = createStockService({ api: api.provider, local: fakeProvider().provider });
     await expect(service.lookup('   ', 'api')).rejects.toBeInstanceOf(InvalidSymbolError);
     expect(api.getDetails).not.toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe('createStockService', () => {
         throw new Error('boom');
       },
     };
-    const service = createStockService({ api: failing, file: failing });
+    const service = createStockService({ api: failing, local: failing });
     await expect(service.lookup('V', 'api')).rejects.toThrow('boom');
   });
 });
