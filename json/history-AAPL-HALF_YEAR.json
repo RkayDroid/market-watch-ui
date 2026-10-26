@@ -1,0 +1,61 @@
+{
+  "ticker": "AAPL",
+  "period": "HALF_YEAR",
+  "interval": "2wk",
+  "count": 13,
+  "cached": true,
+  "data": [
+    {
+      "datetime": "2026-05-08",
+      "price": 292.7975
+    },
+    {
+      "datetime": "2026-05-22",
+      "price": 308.5539
+    },
+    {
+      "datetime": "2026-06-05",
+      "price": 307.0752
+    },
+    {
+      "datetime": "2026-06-18",
+      "price": 297.7532
+    },
+    {
+      "datetime": "2026-07-02",
+      "price": 308.364
+    },
+    {
+      "datetime": "2026-07-17",
+      "price": 333.4524
+    },
+    {
+      "datetime": "2026-07-31",
+      "price": 308.6438
+    },
+    {
+      "datetime": "2026-08-14",
+      "price": 305.93
+    },
+    {
+      "datetime": "2026-08-28",
+      "price": 319.7
+    },
+    {
+      "datetime": "2026-09-11",
+      "price": 332.27
+    },
+    {
+      "datetime": "2026-09-25",
+      "price": 341.07
+    },
+    {
+      "datetime": "2026-10-09",
+      "price": 336.64
+    },
+    {
+      "datetime": "2026-10-23",
+      "price": 347.73
+    }
+  ]
+}
