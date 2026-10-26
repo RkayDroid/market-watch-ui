@@ -1,4 +1,4 @@
-import type { HourlyPrice, PriceRecord, StockData, Trend } from '../types/stock.ts';
+import type { HourlyPrice, PriceHistory, PriceRecord, StockData, StockDetails, Trend } from '../types/stock.ts';
 
 /** Direction of `current` relative to `previous`. The first point has no previous → neutral. */
 export function computeTrend(current: number, previous: number | undefined): Trend {
@@ -42,26 +42,38 @@ export function buildHourlyHistory(
   }));
 }
 
-/** Derives the full {@link StockData} view model from a chronological price series. */
-export function summarizeStock(
-  symbol: string,
+/**
+ * Derives {@link PriceHistory} from a chronological price series, or `null` when
+ * the series is empty (the data source has no historic prices for the symbol).
+ */
+export function summarizePriceHistory(
   records: readonly PriceRecord[],
   formatLabel?: HourLabelFormatter,
-): StockData {
-  if (records.length === 0) {
-    throw new Error(`No price data available for ${symbol}.`);
-  }
+): PriceHistory | null {
+  if (records.length === 0) return null;
 
   const rates = records.map((r) => r.rate);
   const startPrice = rates[0];
   const endPrice = rates[rates.length - 1];
 
   return {
-    symbol,
     currentPrice: endPrice,
     highPrice: Math.max(...rates),
     lowPrice: Math.min(...rates),
     changePercent: computeChangePercent(startPrice, endPrice),
-    history: buildHourlyHistory(records, formatLabel),
+    hourly: buildHourlyHistory(records, formatLabel),
+  };
+}
+
+/** Combines reference data with the (possibly empty) price series into the {@link StockData} view model. */
+export function buildStockData(
+  details: StockDetails,
+  records: readonly PriceRecord[],
+  formatLabel?: HourLabelFormatter,
+): StockData {
+  return {
+    symbol: details.symbol,
+    details,
+    history: summarizePriceHistory(records, formatLabel),
   };
 }

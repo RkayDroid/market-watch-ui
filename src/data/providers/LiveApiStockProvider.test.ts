@@ -1,23 +1,16 @@
 import { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
+import detailAapl from '../../../json/detail-AAPL.json';
 import {
-  buildPricesUrl,
-  createLiveApiPriceProvider,
+  buildStockUrl,
+  createLiveApiStockProvider,
   parseLiveApiResponse,
   toLiveApiError,
   type HttpClient,
-} from './LiveApiPriceProvider.ts';
-import { LiveApiError, SymbolNotFoundError } from './PriceProvider.ts';
+} from './LiveApiStockProvider.ts';
+import { LiveApiError, SymbolNotFoundError } from './StockProvider.ts';
 
 const config = { baseUrl: 'https://api.test/v1', timeoutMs: 1234 };
-
-const okPayload = {
-  symbol: 'AAPL',
-  prices: [
-    { timestamp: '2026-10-21T16:00:00Z', price: 219.5 },
-    { timestamp: '2026-10-21T15:00:00Z', price: 220.1 },
-  ],
-};
 
 function axiosErr(init: { status?: number; code?: string }): AxiosError {
   const err = new AxiosError('boom', init.code);
@@ -35,51 +28,53 @@ function fakeClient(impl: (url: string) => Promise<unknown> | unknown) {
   return { client, get };
 }
 
-describe('buildPricesUrl', () => {
-  it('composes path, query and encodes the symbol', () => {
-    expect(buildPricesUrl('https://api.test/v1', 'BRK.B')).toBe(
-      'https://api.test/v1/prices/BRK.B?interval=1h&limit=24',
-    );
-    expect(buildPricesUrl('https://api.test/v1///', 'A B', { interval: '5m', limit: 10 })).toBe(
-      'https://api.test/v1/prices/A%20B?interval=5m&limit=10',
-    );
+describe('buildStockUrl', () => {
+  it('composes the /stock/{symbol} path and encodes the symbol', () => {
+    expect(buildStockUrl('https://api.test/v1', 'AAPL')).toBe('https://api.test/v1/stock/AAPL');
+    expect(buildStockUrl('https://api.test/v1///', 'A B')).toBe('https://api.test/v1/stock/A%20B');
+  });
+
+  it('sends no query string — the endpoint has no interval/limit', () => {
+    expect(buildStockUrl('https://api.test/v1', 'BRK.B')).not.toContain('?');
   });
 });
 
 describe('parseLiveApiResponse', () => {
-  it('maps and sorts points chronologically', () => {
-    expect(parseLiveApiResponse(okPayload, 'AAPL')).toEqual([
-      { date: '2026-10-21T15:00:00.000Z', rate: 220.1 },
-      { date: '2026-10-21T16:00:00.000Z', rate: 219.5 },
-    ]);
-  });
-
-  it('coerces numeric strings for price', () => {
-    const out = parseLiveApiResponse({ prices: [{ timestamp: '2026-10-21T15:00:00Z', price: '1.5' }] }, 'X');
-    expect(out[0].rate).toBe(1.5);
+  it('maps the captured live payload', () => {
+    expect(parseLiveApiResponse(detailAapl, 'AAPL')).toEqual({
+      symbol: 'AAPL',
+      displayName: 'Apple',
+      longName: 'Apple Inc.',
+      sector: 'Technology',
+      exchange: 'NMS',
+      market: 'us_market',
+      currency: 'USD',
+      language: 'en-US',
+      fulldayPrice: 347.725,
+    });
   });
 
   it.each([
     ['null body', null, /not an object/],
     ['array body', [], /not an object/],
-    ['missing prices', { symbol: 'X' }, /"prices" is not an array/],
-    ['empty prices', { prices: [] }, /"prices" is empty/],
-    ['non-object point', { prices: [1] }, /prices\[0\] is not an object/],
-    ['bad timestamp', { prices: [{ timestamp: 'nope', price: 1 }] }, /prices\[0\]\.timestamp/],
-    ['bad price', { prices: [{ timestamp: '2026-10-21T15:00:00Z', price: 'abc' }] }, /prices\[0\]\.price/],
-  ])('rejects %s', (_name, payload, pattern) => {
-    expect(() => parseLiveApiResponse(payload, 'X')).toThrow(LiveApiError);
-    expect(() => parseLiveApiResponse(payload, 'X')).toThrow(pattern);
+    ['missing symbol', { sector: 'X' }, /"symbol" is missing/],
+    ['bad price', { symbol: 'X', fulldayPrice: 'abc' }, /"fulldayPrice" is not a number/],
+  ])('rejects %s as kind=malformed', (_name, payload, pattern) => {
+    let caught: unknown;
     try {
       parseLiveApiResponse(payload, 'X');
     } catch (e) {
-      expect((e as LiveApiError).kind).toBe('malformed');
+      caught = e;
     }
+    expect(caught).toBeInstanceOf(LiveApiError);
+    expect((caught as LiveApiError).kind).toBe('malformed');
+    expect((caught as LiveApiError).message).toMatch(/^The live API returned an unexpected response for X: /);
+    expect((caught as LiveApiError).message).toMatch(pattern);
   });
 });
 
 describe('toLiveApiError', () => {
-  const url = 'https://api.test/v1/prices/X';
+  const url = 'https://api.test/v1/stock/X';
 
   it('maps 404 to SymbolNotFoundError', () => {
     const err = toLiveApiError(axiosErr({ status: 404 }), 'X', url);
@@ -115,45 +110,44 @@ describe('toLiveApiError', () => {
   });
 });
 
-describe('createLiveApiPriceProvider', () => {
-  it('requests the built url with timeout and accept header, and returns parsed records', async () => {
-    const { client, get } = fakeClient(() => okPayload);
-    const provider = createLiveApiPriceProvider(config, { client });
+describe('createLiveApiStockProvider', () => {
+  it('requests GET {base}/stock/{symbol} with timeout and accept header, and returns parsed details', async () => {
+    const { client, get } = fakeClient(() => detailAapl);
+    const provider = createLiveApiStockProvider(config, { client });
 
-    const records = await provider.getPrices('AAPL');
+    const details = await provider.getDetails('AAPL');
 
-    expect(records.map((r) => r.rate)).toEqual([220.1, 219.5]);
-    expect(get).toHaveBeenCalledWith('https://api.test/v1/prices/AAPL?interval=1h&limit=24', {
+    expect(details).toMatchObject({ symbol: 'AAPL', displayName: 'Apple', fulldayPrice: 347.725 });
+    expect(get).toHaveBeenCalledWith('https://api.test/v1/stock/AAPL', {
       headers: { Accept: 'application/json' },
       timeout: 1234,
     });
   });
 
-  it('sends a bearer token when an api key is configured', async () => {
-    const { client, get } = fakeClient(() => okPayload);
-    await createLiveApiPriceProvider({ ...config, apiKey: 'k3y' }, { client }).getPrices('AAPL');
-
-    expect(get.mock.calls[0][1]).toMatchObject({ headers: { Authorization: 'Bearer k3y' } });
+  it('has no price history — the endpoint does not provide any', () => {
+    const { client } = fakeClient(() => detailAapl);
+    expect(createLiveApiStockProvider(config, { client }).getPrices).toBeUndefined();
   });
 
-  it('honours custom query options', async () => {
-    const { client, get } = fakeClient(() => okPayload);
-    await createLiveApiPriceProvider(config, { client, query: { interval: '15m', limit: 8 } }).getPrices('V');
-    expect(get.mock.calls[0][0]).toBe('https://api.test/v1/prices/V?interval=15m&limit=8');
+  it('sends a bearer token when an api key is configured', async () => {
+    const { client, get } = fakeClient(() => detailAapl);
+    await createLiveApiStockProvider({ ...config, apiKey: 'k3y' }, { client }).getDetails('AAPL');
+
+    expect(get.mock.calls[0][1]).toMatchObject({ headers: { Authorization: 'Bearer k3y' } });
   });
 
   it('translates transport errors into typed errors', async () => {
     const { client } = fakeClient(() => {
       throw axiosErr({ status: 404 });
     });
-    await expect(createLiveApiPriceProvider(config, { client }).getPrices('ZZZZ')).rejects.toBeInstanceOf(
+    await expect(createLiveApiStockProvider(config, { client }).getDetails('ZZZZ')).rejects.toBeInstanceOf(
       SymbolNotFoundError,
     );
   });
 
   it('translates malformed payloads into LiveApiError', async () => {
-    const { client } = fakeClient(() => ({ prices: 'nope' }));
-    await expect(createLiveApiPriceProvider(config, { client }).getPrices('AAPL')).rejects.toMatchObject({
+    const { client } = fakeClient(() => ({ prices: [] }));
+    await expect(createLiveApiStockProvider(config, { client }).getDetails('AAPL')).rejects.toMatchObject({
       name: 'LiveApiError',
       kind: 'malformed',
     });
@@ -161,10 +155,9 @@ describe('createLiveApiPriceProvider', () => {
 
   it('uses the global axios instance by default and reports unreachable hosts', async () => {
     // 'http://127.0.0.1:9' — port 9 (discard) is closed, so the connection is refused immediately.
-    const provider = createLiveApiPriceProvider({ baseUrl: 'http://127.0.0.1:9', timeoutMs: 2000 });
-    const err = await provider.getPrices('AAPL').catch((e: unknown) => e);
+    const provider = createLiveApiStockProvider({ baseUrl: 'http://127.0.0.1:9', timeoutMs: 2000 });
+    const err = await provider.getDetails('AAPL').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(LiveApiError);
     expect((err as LiveApiError).kind).toBe('unreachable');
   });
 });
-

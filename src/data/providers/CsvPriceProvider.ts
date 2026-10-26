@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { parsePriceTable } from '../csv/parsePriceRecords.ts';
 import type { PriceRecord, PriceTable } from '../../types/stock.ts';
-import { SymbolNotFoundError, type PriceProvider } from './PriceProvider.ts';
+import { SymbolNotFoundError, type PriceProvider } from './StockProvider.ts';
 
 /** Path (relative to the Vite base URL) of the flat-file price database. */
 export const LOCAL_DATA_CSV_PATH = 'local-data.csv';

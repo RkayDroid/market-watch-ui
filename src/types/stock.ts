@@ -1,7 +1,7 @@
 /** Direction of an hourly price move relative to the previous hour. */
 export type Trend = 'up' | 'down' | 'neutral';
 
-/** Where price data is sourced from. */
+/** Where stock data is sourced from. */
 export type DataSource = 'api' | 'file';
 
 export const DATA_SOURCES: readonly DataSource[] = ['api', 'file'];
@@ -20,6 +20,31 @@ export interface PriceRecord {
 /** Price records keyed by (upper-cased) ticker symbol. */
 export type PriceTable = Record<string, PriceRecord[]>;
 
+/**
+ * Reference data about a listed stock, as returned by `GET /stock/{symbol}`.
+ * Only `symbol` is guaranteed; every other field is shown when present.
+ */
+export interface StockDetails {
+  /** Upper-case ticker symbol, e.g. "AAPL". */
+  symbol: string;
+  /** Short marketing name, e.g. "Apple". */
+  displayName?: string;
+  /** Full legal name, e.g. "Apple Inc.". */
+  longName?: string;
+  /** Sector classification, e.g. "Technology". */
+  sector?: string;
+  /** Exchange code, e.g. "NMS". */
+  exchange?: string;
+  /** Market identifier, e.g. "us_market". */
+  market?: string;
+  /** ISO-4217 currency code the price is quoted in, e.g. "USD". */
+  currency?: string;
+  /** BCP-47 language tag of the listing, e.g. "en-US". */
+  language?: string;
+  /** Price for the full trading day, in `currency`. */
+  fulldayPrice?: number;
+}
+
 /** One row of the hourly breakdown shown in the UI. */
 export interface HourlyPrice {
   hour: string;
@@ -27,12 +52,19 @@ export interface HourlyPrice {
   trend: Trend;
 }
 
-/** Fully derived view model for a stock lookup. */
-export interface StockData {
-  symbol: string;
+/** Everything derived from a chronological hourly price series. */
+export interface PriceHistory {
   currentPrice: number;
   highPrice: number;
   lowPrice: number;
   changePercent: number;
-  history: HourlyPrice[];
+  hourly: HourlyPrice[];
+}
+
+/** Fully derived view model for a stock lookup. */
+export interface StockData {
+  symbol: string;
+  details: StockDetails;
+  /** `null` when the data source has no historic prices for the symbol. */
+  history: PriceHistory | null;
 }

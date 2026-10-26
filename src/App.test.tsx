@@ -4,34 +4,33 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from './App.tsx';
 import { createCsvPriceProvider } from './data/providers/CsvPriceProvider.ts';
-import { createLiveApiPriceProvider, type HttpClient } from './data/providers/LiveApiPriceProvider.ts';
+import { createLiveApiStockProvider, type HttpClient } from './data/providers/LiveApiStockProvider.ts';
+import { createLocalStockProvider, type DetailsLoader } from './data/providers/LocalStockProvider.ts';
 import { createStockService } from './services/stockService.ts';
 /** The real flat file shipped with the app, bundled as text instead of fetched over HTTP. */
 import LOCAL_CSV from '../public/local-data.csv?raw';
+/** A captured live response, served by the fake live API below. */
+import detailAapl from '../json/detail-AAPL.json';
 
-/** Fake HTTP client standing in for the (not yet available) live API. */
+/** The offline detail fixtures (copies of the captured live responses), bundled instead of fetched. */
+const LOCAL_DETAILS = import.meta.glob<unknown>('../public/data/detail-*.json', { eager: true, import: 'default' });
+
+/** Fake HTTP client standing in for the live API: knows AAPL, 404s everything else. */
 const fakeHttp: HttpClient = {
   get: async (url) => {
-    if (url.includes('/prices/ANY?')) {
-      return {
-        data: {
-          symbol: 'ANY',
-          prices: Array.from({ length: 24 }, (_, i) => ({
-            timestamp: new Date(Date.UTC(2026, 9, 21, 15 + i)).toISOString(),
-            price: 100 + i,
-          })),
-        },
-      };
-    }
+    if (url.endsWith('/stock/AAPL')) return { data: detailAapl };
     throw new AxiosError('not found', undefined, undefined, undefined, { status: 404 } as AxiosResponse);
   },
 };
 
+/** Resolves `public/data/detail-{SYMBOL}.json` from the bundled fixtures. */
+const loadLocalDetails: DetailsLoader = async (symbol) => LOCAL_DETAILS[`../public/data/detail-${symbol}.json`] ?? null;
+
 function buildService() {
   return createStockService(
     {
-      file: createCsvPriceProvider(async () => LOCAL_CSV),
-      api: createLiveApiPriceProvider({ baseUrl: 'https://api.test/v1', timeoutMs: 100 }, { client: fakeHttp }),
+      file: createLocalStockProvider(createCsvPriceProvider(async () => LOCAL_CSV), loadLocalDetails),
+      api: createLiveApiStockProvider({ baseUrl: 'https://api.test/v1', timeoutMs: 100 }, { client: fakeHttp }),
     },
     { formatLabel: (d) => d },
   );
@@ -55,25 +54,45 @@ describe('App (integration with local-data.csv)', () => {
     expect(screen.getByTestId('summary-change')).toHaveTextContent('2.65%');
     expect(screen.getAllByRole('row')).toHaveLength(25); // header + 24 hours
 
+    // V has no detail-V.json, so only the symbol tile is shown in the detail grid.
+    expect(screen.getByTestId('detail-tiles').children).toHaveLength(1);
+    expect(screen.queryByTestId('history-unavailable')).not.toBeInTheDocument();
+
     const chart = screen.getByTestId('price-chart');
     expect(chart).toHaveAttribute('data-direction', 'up');
     expect(within(chart).getAllByTestId('price-point')).toHaveLength(24);
   });
 
-  it('lays out tiles beside the chart, with the table below', async () => {
+  it('lays out the detail grid, then tiles beside the chart, with the table below', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('AAPL', 'file');
     await screen.findByTestId('summary-symbol');
 
+    const details = screen.getByTestId('detail-tiles');
     const row = screen.getByTestId('overview-row');
     const [tilesCol, chartCol] = Array.from(row.children);
     expect(row.children).toHaveLength(2);
     expect(tilesCol).toContainElement(screen.getByTestId('summary-tiles'));
     expect(chartCol).toContainElement(screen.getByTestId('price-chart'));
+    expect(details).toContainElement(screen.getByTestId('summary-symbol'));
+    expect(details.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const table = screen.getByRole('table');
     expect(row.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(row).not.toContainElement(table);
+  });
+
+  it('shows the offline detail tiles next to the CSV history for a symbol in both files', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('aapl', 'file');
+
+    expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('AAPL');
+    expect(screen.getByTestId('detail-company')).toHaveTextContent('Apple');
+    expect(screen.getByTestId('detail-sector')).toHaveTextContent('Technology');
+    expect(screen.getByTestId('detail-fullday-price')).toHaveTextContent('$347.73');
+    // History-derived figures still come from the CSV.
+    expect(screen.getByTestId('summary-price')).toHaveTextContent('$227.50');
+    expect(screen.getAllByRole('row')).toHaveLength(25);
   });
 
   it('shows a not-found error for symbols absent from the file', async () => {
@@ -103,13 +122,14 @@ describe('App (integration with local-data.csv)', () => {
     // Gate the file provider so the second lookup stays in flight until we release it.
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    const csv = createCsvPriceProvider(async () => LOCAL_CSV);
+    const local = createLocalStockProvider(createCsvPriceProvider(async () => LOCAL_CSV), loadLocalDetails);
     let calls = 0;
     const gated = {
-      async getPrices(symbol: string) {
+      async getDetails(symbol: string) {
         if (++calls > 1) await gate;
-        return csv.getPrices(symbol);
+        return local.getDetails(symbol);
       },
+      getPrices: (symbol: string) => local.getPrices!(symbol),
     };
     const service = createStockService(
       { file: gated, api: gated },
@@ -140,14 +160,30 @@ describe('App (integration with local-data.csv)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('renders data returned by the live API source', async () => {
+  it('renders the detail tiles from GET /stock/{symbol} and hides the history panels', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
-    await lookup('any', 'api');
+    await lookup('aapl', 'api');
 
-    expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('ANY');
-    expect(screen.getByTestId('summary-price')).toHaveTextContent('$123.00');
-    expect(screen.getByTestId('summary-change')).toHaveTextContent('23%');
-    expect(screen.getAllByRole('row')).toHaveLength(25);
+    expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('AAPL');
+    const grid = screen.getByTestId('detail-tiles');
+    expect(Array.from(grid.children).map((tile) => tile.textContent)).toEqual([
+      'SymbolAAPL',
+      'CompanyAppleApple Inc.',
+      'Full-day Price$347.73USD',
+      'SectorTechnology',
+      'ExchangeNMSNASDAQ Global Select Market',
+      'MarketUS Marketus_market',
+      'CurrencyUSDUS Dollar',
+      'Languageen-USAmerican English',
+    ]);
+
+    // The endpoint carries no historic prices: no chart, table or 24h tiles — just an explanation.
+    expect(screen.getByTestId('history-unavailable')).toHaveTextContent(/does not provide historic prices/);
+    expect(screen.queryByTestId('overview-row')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('price-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('summary-price')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows a not-found error when the live API returns 404', async () => {

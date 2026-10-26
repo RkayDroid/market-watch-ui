@@ -16,7 +16,7 @@ export default function LoadingIndicator({ symbol }: LoadingIndicatorProps) {
       <Box sx={{ textAlign: 'center' }}>
         <Typography variant="subtitle1">Fetching results{symbol ? ` for ${symbol}` : ''}…</Typography>
         <Typography variant="caption" color="textSecondary">
-          Retrieving the last 24 hours of prices
+          Retrieving stock details and recent prices
         </Typography>
       </Box>
     </Paper>

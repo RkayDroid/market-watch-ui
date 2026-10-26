@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCsvPriceProvider } from './CsvPriceProvider.ts';
-import { SymbolNotFoundError } from './PriceProvider.ts';
+import { SymbolNotFoundError } from './StockProvider.ts';
 
 const CSV = [
   'symbol,date,rate',

@@ -2,13 +2,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import LookupForm from './components/LookupForm.tsx';
 import StockSummaryCards from './components/StockSummaryCards.tsx';
+import StockDetailCards from './components/StockDetailCards.tsx';
+import HistoryUnavailableNotice from './components/HistoryUnavailableNotice.tsx';
 import HourlyPriceTable from './components/HourlyPriceTable.tsx';
 import PriceChart from './components/PriceChart.tsx';
 import LoadingIndicator from './components/LoadingIndicator.tsx';
 import ErrorBanner from './components/ErrorBanner.tsx';
 import { useStockLookup, type UseStockLookupOptions } from './hooks/useStockLookup.ts';
-import { createDefaultCsvPriceProvider } from './data/providers/CsvPriceProvider.ts';
-import { createLiveApiPriceProvider } from './data/providers/LiveApiPriceProvider.ts';
+import { createDefaultLocalStockProvider } from './data/providers/LocalStockProvider.ts';
+import { createLiveApiStockProvider } from './data/providers/LiveApiStockProvider.ts';
 import { getLiveApiConfig } from './config/liveApiConfig.ts';
 import { createStockService, type StockService } from './services/stockService.ts';
 import type { DataSource } from './types/stock.ts';
@@ -23,8 +25,8 @@ export interface AppProps {
 
 function createDefaultStockService(): StockService {
   return createStockService({
-    api: createLiveApiPriceProvider(getLiveApiConfig()),
-    file: createDefaultCsvPriceProvider(),
+    api: createLiveApiStockProvider(getLiveApiConfig()),
+    file: createDefaultLocalStockProvider(),
   });
 }
 
@@ -64,24 +66,32 @@ export default function App({ service, lookupOptions }: AppProps) {
 
       {data && !loading && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box
-            data-testid="overview-row"
-            sx={{
-              display: 'flex',
-              gap: 2,
-              alignItems: 'stretch',
-              flexDirection: { xs: 'column', md: 'row' },
-            }}
-          >
-            <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
-              <StockSummaryCards stock={data} />
-            </Box>
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <PriceChart history={data.history} />
-            </Box>
-          </Box>
+          <StockDetailCards details={data.details} />
 
-          <HourlyPriceTable history={data.history} />
+          {data.history ? (
+            <>
+              <Box
+                data-testid="overview-row"
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  alignItems: 'stretch',
+                  flexDirection: { xs: 'column', md: 'row' },
+                }}
+              >
+                <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
+                  <StockSummaryCards history={data.history} currency={data.details.currency} />
+                </Box>
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <PriceChart history={data.history.hourly} />
+                </Box>
+              </Box>
+
+              <HourlyPriceTable history={data.history.hourly} />
+            </>
+          ) : (
+            <HistoryUnavailableNotice />
+          )}
         </Box>
       )}
     </Container>

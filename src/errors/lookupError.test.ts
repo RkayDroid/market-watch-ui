@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LiveApiError, SymbolNotFoundError } from '../data/providers/PriceProvider.ts';
+import { LiveApiError, SymbolNotFoundError } from '../data/providers/StockProvider.ts';
 import { InvalidSymbolError } from '../services/stockService.ts';
 import { GENERIC_LOOKUP_ERROR, toLookupError } from './lookupError.ts';
 

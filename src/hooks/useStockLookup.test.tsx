@@ -6,11 +6,8 @@ import { useStockLookup } from './useStockLookup.ts';
 
 const stock = (symbol: string): StockData => ({
   symbol,
-  currentPrice: 1,
-  highPrice: 1,
-  lowPrice: 1,
-  changePercent: 0,
-  history: [],
+  details: { symbol },
+  history: null,
 });
 
 function deferred<T>() {

@@ -1,12 +1,27 @@
-import type { PriceRecord } from '../../types/stock.ts';
+import type { PriceRecord, StockDetails } from '../../types/stock.ts';
 
 /**
- * Abstraction over any source of hourly prices (flat file, live API, ...).
+ * Abstraction over any source of hourly prices (flat file, future history API, ...).
  * Implementations must return records sorted oldest → newest.
  */
 export interface PriceProvider {
   /** Resolves price history for a (normalised, upper-case) symbol. */
   getPrices(symbol: string): Promise<PriceRecord[]>;
+}
+
+/**
+ * Abstraction over a source of stock data (live API, local files, ...).
+ *
+ * Details are mandatory — a source that cannot resolve them must reject with
+ * {@link SymbolNotFoundError}. Historic prices are optional: sources with no
+ * concept of history (such as the live `GET /stock/{symbol}` endpoint) omit
+ * `getPrices`, and sources that have history for only some symbols resolve `[]`.
+ */
+export interface StockProvider {
+  /** Resolves reference data for a (normalised, upper-case) symbol. */
+  getDetails(symbol: string): Promise<StockDetails>;
+  /** Resolves the hourly price series (oldest → newest), or `[]` when the source has none. */
+  getPrices?(symbol: string): Promise<PriceRecord[]>;
 }
 
 export interface SymbolNotFoundOptions {
@@ -33,7 +48,7 @@ export class SymbolNotFoundError extends Error {
 
 export type LiveApiFailureKind = 'unreachable' | 'timeout' | 'http' | 'malformed';
 
-/** Raised when the live price API cannot be reached or returns something unusable. */
+/** Raised when the live stock API cannot be reached or returns something unusable. */
 export class LiveApiError extends Error {
   readonly kind: LiveApiFailureKind;
   readonly status?: number;

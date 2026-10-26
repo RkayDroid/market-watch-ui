@@ -1,4 +1,4 @@
-import { LiveApiError, SymbolNotFoundError } from '../data/providers/PriceProvider.ts';
+import { LiveApiError, SymbolNotFoundError } from '../data/providers/StockProvider.ts';
 import { InvalidSymbolError } from '../services/stockService.ts';
 
 /** A user-presentable description of why a lookup failed. */

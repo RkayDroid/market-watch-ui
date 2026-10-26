@@ -1,9 +1,9 @@
-import type { PriceProvider } from '../data/providers/PriceProvider.ts';
+import type { StockProvider } from '../data/providers/StockProvider.ts';
 import { normalizeSymbol } from '../data/csv/parsePriceRecords.ts';
 import type { DataSource, StockData } from '../types/stock.ts';
-import { summarizeStock, type HourLabelFormatter } from './stockAnalytics.ts';
+import { buildStockData, type HourLabelFormatter } from './stockAnalytics.ts';
 
-export type ProviderRegistry = Record<DataSource, PriceProvider>;
+export type ProviderRegistry = Record<DataSource, StockProvider>;
 
 export interface StockService {
   lookup(symbol: string, source: DataSource): Promise<StockData>;
@@ -23,6 +23,9 @@ export class InvalidSymbolError extends Error {
 /**
  * Composes a provider lookup with the analytics layer. Providers are injected so
  * the service (and the UI above it) can be tested with fakes.
+ *
+ * Details and history are requested together; a provider without `getPrices`
+ * (e.g. the live API) yields a `StockData` with `history: null`.
  */
 export function createStockService(
   providers: ProviderRegistry,
@@ -34,8 +37,12 @@ export function createStockService(
       if (!symbol) {
         throw new InvalidSymbolError();
       }
-      const records = await providers[source].getPrices(symbol);
-      return summarizeStock(symbol, records, options.formatLabel);
+      const provider = providers[source];
+      const [details, records] = await Promise.all([
+        provider.getDetails(symbol),
+        provider.getPrices ? provider.getPrices(symbol) : Promise.resolve([]),
+      ]);
+      return buildStockData(details, records, options.formatLabel);
     },
   };
 }

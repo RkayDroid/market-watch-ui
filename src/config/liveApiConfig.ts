@@ -1,5 +1,5 @@
 /**
- * Runtime configuration for the live price API.
+ * Runtime configuration for the live stock API.
  *
  * Values come from Vite env vars (`.env`, `.env.local`, …); see `.env.example`.
  * The defaults point at a placeholder host so the provider is fully wired up
