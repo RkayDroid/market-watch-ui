@@ -128,6 +128,12 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
 Proportions are defined once in `src/layout.ts`. The Vite template's default stylesheet was
 replaced with MUI's `CssBaseline` and a compact theme (`src/theme.ts`) so MUI controls all styling.
 
+## Before / after
+
+[`docs/BEFORE-AFTER.md`](docs/BEFORE-AFTER.md) documents the migration from the CSV/`/prices` version to
+the `/stock` + `/historic` + `/highlow` version use case by use case, with side-by-side screenshots
+(`docs/before/` = original, `docs/screenshots/` = current), API and data-model diffs, and test metrics.
+
 ## Screenshots
 
 Captured with headless Chromium at 1440px — see `docs/screenshots/`:
@@ -138,9 +144,12 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 | `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
 | `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the past-performance toolbar before fetching |
 | `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Performance: high/low tiles, chart and table for the period (offline fixtures) |
+| `02-performance-loading.png` | Performance fetch in progress (toolbar disabled, panel-local indicator) |
 | `live-META.png` | Same via the live API (`/stock`, `/historic`, `/highlow` served by a stub), Week |
+| `tablet-AAPL-WEEK.png` | 820 px layout with performance loaded |
 | `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |
 | `91-live-api-unreachable.png` | Live API selected with no endpoint configured |
+| `92-performance-error.png` | Performance fetch failed — error contained in the panel, detail tiles intact |
 
 ## Architecture
 

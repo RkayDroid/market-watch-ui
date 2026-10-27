@@ -1,4 +1,4 @@
-Market Watch UI — cumulative change set vs. the original baseline (rounds 1–7)
+Market Watch UI — cumulative change set vs. the original baseline (rounds 1–8, incl. docs/BEFORE-AFTER.md)
 Unzip over the project root (market-watch-ui/), overwriting files, then DELETE the files below.
 
 === DELETE these files locally (if present) ===
@@ -26,10 +26,20 @@ src/data/csv/           (whole folder)
 === COPY / OVERWRITE (all included in this zip) ===
 .env.example
 README.md
+docs/BEFORE-AFTER.md
+docs/before/00-initial.png
+docs/before/01-loading.png
+docs/before/90-not-found.png
+docs/before/91-live-api-unreachable.png
+docs/before/AAPL-overview.png
+docs/before/AAPL.png
+docs/before/META.png
 docs/screenshots/00-initial.png
 docs/screenshots/01-loading.png
+docs/screenshots/02-performance-loading.png
 docs/screenshots/90-not-found.png
 docs/screenshots/91-live-api-unreachable.png
+docs/screenshots/92-performance-error.png
 docs/screenshots/AAPL-WEEK.png
 docs/screenshots/AAPL.png
 docs/screenshots/GOOG-DAY.png
@@ -37,6 +47,7 @@ docs/screenshots/GOOG.png
 docs/screenshots/META-FIVE_YEAR.png
 docs/screenshots/META.png
 docs/screenshots/live-META.png
+docs/screenshots/tablet-AAPL-WEEK.png
 public/data/detail-AAPL.json
 public/data/detail-GOOG.json
 public/data/detail-META.json
