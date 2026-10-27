@@ -75,7 +75,7 @@ describe('App (default service wiring)', () => {
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'AAPL{enter}');
     await screen.findByTestId('summary-symbol');
     await userEvent.click(screen.getByRole('radio', { name: 'Month' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Performance' }));
 
     expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
     expect(screen.getByTestId('summary-high')).toHaveTextContent('$351.73');

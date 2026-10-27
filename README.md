@@ -2,7 +2,7 @@
 
 A small React + TypeScript + Vite app that looks up a stock symbol and shows its reference
 data (company, sector, exchange, market, currency, …) plus a "Past Performance" section: pick a
-period (day … 5 years), click Fetch, and get the high/low tiles, price-trend chart and interval table.
+period (day … 5 years), click Performance, and get the high/low tiles, price-trend chart and interval table.
 
 ## Scripts
 
@@ -105,9 +105,10 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   fields: Symbol, Company (display name + long name), Full-day Price (formatted in the stock's currency),
   Sector, Exchange (code + name for known codes), Market (humanised), Currency and Language (code + name
   via `Intl.DisplayNames`). Tiles for absent fields are not rendered.
-- **Past Performance** — a single panel beneath the tiles. Its header bar holds the title, the period radio
-  group right beside it (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists
-  across lookups) and a **Fetch** button. Until Fetch is clicked the panel is just this header. Fetch calls `/historic` and `/highlow` together for the loaded symbol, the
+- **Past Performance** — a single panel beneath the tiles, with no visible title (the region is named
+  "Past Performance" for assistive tech). Its dark toolbar holds the period radio group in white bold text
+  (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups) and a
+  white **Performance** button. Until Performance is clicked the panel is just this toolbar. It calls `/historic` and `/highlow` together for the loaded symbol, the
   selected period and the source the symbol was loaded from, with its own loading indicator and error
   banner inside the panel. Results render as: Latest Price (with change over the period) plus High
   and Low tiles (with when they occurred) in a 15% column beside the price chart (fixed 280px height,
@@ -115,7 +116,7 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   the loaded period and sampling interval (e.g. "Past Week (daily)"). The chart and table are rendered
   `embedded` (no border of their own) so the group reads as one unit. Results belong to the period they
   were fetched for: changing the radio (or looking up another symbol) removes them, and nothing is shown
-  again until the next Fetch. Stacks vertically on small screens.
+  again until Performance is clicked again. Stacks vertically on small screens.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even
   the instant local source gives visible feedback. Failures render as a styled `ErrorBanner` with a
@@ -133,8 +134,8 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 | --- | --- |
 | `00-initial.png` | Empty state; "Find" disabled until a symbol is entered |
 | `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
-| `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the Past Performance header before fetching |
-| `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Fetch: high/low tiles, chart and table for the period (offline fixtures) |
+| `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the past-performance toolbar before fetching |
+| `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Performance: high/low tiles, chart and table for the period (offline fixtures) |
 | `live-META.png` | Same via the live API (`/stock`, `/historic`, `/highlow` served by a stub), Week |
 | `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |
 | `91-live-api-unreachable.png` | Live API selected with no endpoint configured |
@@ -159,7 +160,7 @@ src/
   services/stockAnalytics.ts              pure trend / change% / label formatting / PastPerformance assembly
   services/stockService.ts                provider registry -> lookup(details) and performance(historic + highlow)
   hooks/useStockLookup.ts                 async state of the symbol lookup (+ the source it loaded from)
-  hooks/usePerformanceLookup.ts           async state of the Fetch (data / loading / pendingPeriod / error, reset)
+  hooks/usePerformanceLookup.ts           async state of the Performance fetch (data / loading / pendingPeriod / error, reset)
   errors/lookupError.ts                   maps thrown errors to a presentable { title, message, hint, suggestions }
   utils/symbol.ts                         normalizeSymbol
   utils/timing.ts                         delay, withMinimumDuration

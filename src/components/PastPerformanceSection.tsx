@@ -1,5 +1,4 @@
-import { Box, Button, CircularProgress, Divider, Paper, Typography } from '@mui/material';
-import HistoryIcon from '@mui/icons-material/History';
+import { Box, Button, CircularProgress, Divider, Paper } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import type { LookupError } from '../errors/lookupError.ts';
 import { performancePeriodLabel, type PerformancePeriod } from '../types/performance.ts';
@@ -27,12 +26,13 @@ export interface PastPerformanceSectionProps {
   error: LookupError | null;
 }
 
-export const PAST_PERFORMANCE_HEADING_ID = 'past-performance-heading';
+/** Accessible name of the panel; it has no visible title. */
+export const PAST_PERFORMANCE_LABEL = 'Past Performance';
 
 /**
- * "Past Performance" as one panel: a header bar (title, period selector, Fetch) and — only
+ * Past-performance panel: a dark toolbar (period selector + "Performance" button) and — only
  * once a fetch is in flight, failed or loaded — the summary tiles beside the price chart and
- * the interval table. Before the first fetch the panel is just its header.
+ * the interval table. Before the first fetch the panel is just its toolbar.
  */
 export default function PastPerformanceSection({
   details,
@@ -53,11 +53,12 @@ export default function PastPerformanceSection({
   return (
     <Paper
       component="section"
-      aria-labelledby={PAST_PERFORMANCE_HEADING_ID}
+      aria-label={PAST_PERFORMANCE_LABEL}
       data-testid="past-performance"
       sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
       <Box
+        data-testid="past-performance-toolbar"
         sx={{
           px: 2,
           py: 1,
@@ -65,27 +66,32 @@ export default function PastPerformanceSection({
           alignItems: 'center',
           gap: 2,
           flexWrap: 'wrap',
-          bgcolor: 'action.hover',
+          bgcolor: 'grey.900',
+          color: 'common.white',
+          fontWeight: 700,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 1 }}>
-          <HistoryIcon color="primary" />
-          <Typography variant="h6" component="h2" id={PAST_PERFORMANCE_HEADING_ID} sx={{ fontWeight: 600 }}>
-            Past Performance
-          </Typography>
-        </Box>
-        <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} />
+        <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} contrast />
         <Button
           variant="contained"
           size="small"
           startIcon={loading ? undefined : <DownloadIcon />}
           disabled={loading}
           onClick={onFetch}
-          aria-label="Fetch"
-          sx={{ flexShrink: 0, whiteSpace: 'nowrap', minWidth: 88 }}
+          aria-label="Performance"
+          sx={{
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+            minWidth: 132,
+            fontWeight: 700,
+            bgcolor: 'common.white',
+            color: 'grey.900',
+            '&:hover': { bgcolor: 'grey.200' },
+            '&.Mui-disabled': { bgcolor: 'grey.700', color: 'grey.400' },
+          }}
           data-testid="fetch-performance"
         >
-          {loading ? <CircularProgress size={18} color="inherit" /> : 'Fetch'}
+          {loading ? <CircularProgress size={18} color="inherit" /> : 'Performance'}
         </Button>
       </Box>
 

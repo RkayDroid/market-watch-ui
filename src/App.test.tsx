@@ -61,7 +61,7 @@ async function lookup(symbol: string, source: 'api' | 'local') {
 const periodRadio = (label: string | RegExp) =>
   within(screen.getByTestId('period-selector')).getByRole('radio', { name: label });
 
-const fetchButton = () => screen.getByRole('button', { name: /fetch/i });
+const fetchButton = () => screen.getByRole('button', { name: 'Performance' });
 
 describe('App', () => {
   it('renders the detail tiles from GET /stock/{symbol} for the live API source', async () => {
@@ -83,7 +83,7 @@ describe('App', () => {
     expect(Array.from(grid.children).map((tile) => tile.textContent)).toEqual(EXPECTED_AAPL_TILES);
   });
 
-  it('shows a "Past Performance" header beneath the tiles, with no chart or table until Fetch is clicked', async () => {
+  it('shows the past-performance toolbar beneath the tiles, with no chart or table until Performance is clicked', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('META', 'local');
     await screen.findByTestId('summary-symbol');
@@ -92,14 +92,14 @@ describe('App', () => {
     const tiles = screen.getByTestId('detail-tiles');
     expect(tiles.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
+    expect(within(section).getByRole('button', { name: 'Performance' })).toBeEnabled();
     expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
     expect(within(section).queryByTestId('price-table-panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
   });
 
-  it('changing the period hides the loaded chart and table until Fetch is clicked again', async () => {
+  it('changing the period hides the loaded chart and table until Performance is clicked again', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('AAPL', 'local');
     await screen.findByTestId('summary-symbol');

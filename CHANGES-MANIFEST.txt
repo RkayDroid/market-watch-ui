@@ -1,4 +1,4 @@
-Market Watch UI — cumulative change set vs. the original baseline (rounds 1–5)
+Market Watch UI — cumulative change set vs. the original baseline (rounds 1–6)
 Unzip over the project root (market-watch-ui/), overwriting files, then DELETE the files below.
 
 === DELETE these files locally (if present) ===

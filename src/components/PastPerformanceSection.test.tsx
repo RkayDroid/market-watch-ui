@@ -37,14 +37,15 @@ function renderSection(overrides: Partial<PastPerformanceSectionProps> = {}) {
 }
 
 describe('PastPerformanceSection', () => {
-  it('is just a header (title, period selector, Fetch) before anything is fetched', () => {
+  it('is just a toolbar (period selector, Performance button) before anything is fetched', () => {
     renderSection();
 
     const section = screen.getByRole('region', { name: 'Past Performance' });
-    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Past Performance');
+    expect(within(section).queryByRole('heading')).not.toBeInTheDocument(); // no visible title
     expect(within(section).getByRole('radiogroup', { name: 'Period:' })).toBeInTheDocument();
     expect(within(section).getByRole('radio', { name: 'Day' })).toBeChecked();
-    expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
+    expect(within(section).getByRole('button', { name: 'Performance' })).toBeEnabled();
+    expect(within(section).queryByText('Fetch')).not.toBeInTheDocument();
 
     expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
     expect(within(section).queryByTestId('price-table-panel')).not.toBeInTheDocument();
@@ -53,13 +54,13 @@ describe('PastPerformanceSection', () => {
     expect(within(section).queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('forwards period changes and Fetch clicks', async () => {
+  it('forwards period changes and Performance clicks', async () => {
     const { onPeriodChange, onFetch } = renderSection();
 
     await userEvent.click(screen.getByRole('radio', { name: 'Week' }));
     expect(onPeriodChange).toHaveBeenCalledWith('WEEK');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Performance' }));
     expect(onFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -79,7 +80,7 @@ describe('PastPerformanceSection', () => {
     renderSection({ error: { title: 'Live API timed out', message: 'The live API timed out for AAPL.' } });
     const section = screen.getByRole('region', { name: 'Past Performance' });
     expect(within(section).getByRole('alert')).toHaveTextContent('Live API timed out');
-    expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
+    expect(within(section).getByRole('button', { name: 'Performance' })).toBeEnabled();
     expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
 
@@ -97,5 +98,18 @@ describe('PastPerformanceSection', () => {
     expect(within(section).getByText('Price Intervals — Past Six Months (every 2 weeks)')).toBeInTheDocument();
     expect(within(section).getAllByRole('row')).toHaveLength(3);
     expect(within(section).getAllByRole('row')[2]).toHaveTextContent('Oct 23, 2026');
+  });
+});
+
+describe('PastPerformanceSection toolbar styling', () => {
+  it('uses a dark toolbar with white, bold period labels', () => {
+    renderSection();
+    const toolbar = screen.getByTestId('past-performance-toolbar');
+    const style = getComputedStyle(toolbar);
+    expect(style.backgroundColor).toBe('rgb(33, 33, 33)'); // theme grey.900
+    expect(style.color).toBe('rgb(255, 255, 255)');
+    const label = screen.getByText('Period:');
+    expect(getComputedStyle(label).color).toBe('rgb(255, 255, 255)');
+    expect(getComputedStyle(label).fontWeight).toBe('700');
   });
 });
