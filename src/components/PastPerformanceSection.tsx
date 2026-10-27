@@ -5,6 +5,7 @@ import { performancePeriodLabel, type PerformancePeriod } from '../types/perform
 import type { PastPerformance, StockDetails } from '../types/stock.ts';
 import { describeInterval } from '../utils/format.ts';
 import { LAYOUT } from '../layout.ts';
+import { DARK_TOOLBAR_SX } from './darkToolbar.ts';
 import ErrorBanner from './ErrorBanner.tsx';
 import LoadingIndicator from './LoadingIndicator.tsx';
 import PeriodSelector from './PeriodSelector.tsx';
@@ -57,20 +58,7 @@ export default function PastPerformanceSection({
       data-testid="past-performance"
       sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      <Box
-        data-testid="past-performance-toolbar"
-        sx={{
-          px: 2,
-          py: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          flexWrap: 'wrap',
-          bgcolor: 'grey.900',
-          color: 'common.white',
-          fontWeight: 700,
-        }}
-      >
+      <Box data-testid="past-performance-toolbar" sx={DARK_TOOLBAR_SX}>
         <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} contrast />
         <Button
           variant="contained"

@@ -99,12 +99,14 @@ without touching the data or service layers.
 
 The UI is a single-screen dashboard (`Container maxWidth={false}`):
 
+- **Header** — "Market Watch & Analytics" in a dark bar with white bold text, styled identically to the
+  past-performance toolbar (both use `DARK_TOOLBAR_SX` from `components/darkToolbar.ts`).
 - **Lookup row** — symbol input (30% width), "Find" button directly beside it (disabled until a
   symbol is typed), and a compact data-source selector, all on one line (wraps below the `md` breakpoint).
 - **Detail tiles** — a responsive grid (`auto-fill`, 160px minimum per tile) of the `GET /stock/{symbol}`
   fields: Symbol, Company (display name + long name), Full-day Price (formatted in the stock's currency),
-  Sector, Exchange (code + name for known codes), Market (humanised), Currency and Language (code + name
-  via `Intl.DisplayNames`). Tiles for absent fields are not rendered.
+  Sector, Exchange (code + name for known codes), Market (humanised) and Currency (code + name via
+  `Intl.DisplayNames`). Tiles for absent fields are not rendered; `language` is parsed but deliberately not shown.
 - **Past Performance** — a single panel beneath the tiles, with no visible title (the region is named
   "Past Performance" for assistive tech). Its dark toolbar holds the period radio group in white bold text
   (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups) and a
@@ -171,6 +173,7 @@ src/
   charts/scales.ts                        linear scale, domain padding, nice ticks (pure)
   charts/paths.ts                         SVG path-string builders (pure)
   charts/priceChartLayout.ts              TrendPoint[] -> scaled points, ticks, paths (pure)
+  components/darkToolbar.ts               shared dark-bar style (page header + past-performance toolbar)
   components/                             LookupForm, LoadingIndicator, ErrorBanner, Tile, StockDetailCards,
                                           PastPerformanceSection, PeriodSelector, StockSummaryCards,
                                           PriceChart, HourlyPriceTable, TrendIndicator

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  describeCurrency,
-  describeExchange,
-  describeLanguage,
-  formatMarket,
-  formatPrice,
-} from './format.ts';
+import { describeCurrency, describeExchange, describeInterval, formatMarket, formatPrice } from './format.ts';
 
 describe('formatPrice', () => {
   it('formats in the given currency with two decimals', () => {
@@ -52,17 +46,30 @@ describe('formatMarket', () => {
   });
 });
 
-describe('describeCurrency / describeLanguage', () => {
+describe('describeCurrency', () => {
   it('describes well-known codes', () => {
     expect(describeCurrency('USD')).toBe('US Dollar');
     expect(describeCurrency('eur')).toBe('Euro');
-    expect(describeLanguage('en-US')).toBe('American English');
   });
 
   it('is undefined for unknown or invalid codes', () => {
     expect(describeCurrency('ZZZ')).toBeUndefined();
     expect(describeCurrency('not a code')).toBeUndefined();
-    expect(describeLanguage('xx-YY')).toBeUndefined();
-    expect(describeLanguage('not a tag')).toBeUndefined();
+  });
+});
+
+describe('describeInterval', () => {
+  it('describes the API sampling intervals', () => {
+    expect(describeInterval('1h')).toBe('hourly');
+    expect(describeInterval('1d')).toBe('daily');
+    expect(describeInterval('1wk')).toBe('weekly');
+    expect(describeInterval('2wk')).toBe('every 2 weeks');
+    expect(describeInterval('1mo')).toBe('monthly');
+    expect(describeInterval('15m')).toBe('every 15 minutes');
+  });
+
+  it('returns unknown formats unchanged', () => {
+    expect(describeInterval('tick')).toBe('tick');
+    expect(describeInterval('')).toBe('');
   });
 });

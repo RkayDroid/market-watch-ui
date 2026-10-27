@@ -1,12 +1,6 @@
 import { Box } from '@mui/material';
 import type { StockDetails } from '../types/stock.ts';
-import {
-  describeCurrency,
-  describeExchange,
-  describeLanguage,
-  formatMarket,
-  formatPrice,
-} from '../utils/format.ts';
+import { describeCurrency, describeExchange, formatMarket, formatPrice } from '../utils/format.ts';
 import Tile from './Tile.tsx';
 
 interface StockDetailCardsProps {
@@ -18,10 +12,12 @@ export const DETAIL_TILE_MIN_WIDTH = 160;
 
 /**
  * Responsive grid of reference-data tiles from `GET /stock/{symbol}`.
- * Only the symbol is guaranteed; every other tile appears when the field is present.
+ * Only the symbol is guaranteed; every other tile appears when the field is present
+ * (the `language` field is deliberately not tiled).
  */
 export default function StockDetailCards({ details }: StockDetailCardsProps) {
-  const { symbol, displayName, longName, sector, exchange, market, currency, language, fulldayPrice } = details;
+  // `language` is parsed and kept on the model but intentionally not shown.
+  const { symbol, displayName, longName, sector, exchange, market, currency, fulldayPrice } = details;
 
   return (
     <Box
@@ -29,7 +25,7 @@ export default function StockDetailCards({ details }: StockDetailCardsProps) {
       sx={{
         display: 'grid',
         gap: 1,
-        gridTemplateColumns: `repeat(auto-fill, minmax(${DETAIL_TILE_MIN_WIDTH}px, 1fr))`,
+        gridTemplateColumns: `repeat(auto-fit, minmax(${DETAIL_TILE_MIN_WIDTH}px, 1fr))`,
       }}
     >
       <Tile label="Symbol" testId="summary-symbol">
@@ -69,12 +65,6 @@ export default function StockDetailCards({ details }: StockDetailCardsProps) {
       {currency && (
         <Tile label="Currency" testId="detail-currency" secondary={describeCurrency(currency)}>
           {currency}
-        </Tile>
-      )}
-
-      {language && (
-        <Tile label="Language" testId="detail-language" secondary={describeLanguage(language)}>
-          {language}
         </Tile>
       )}
     </Box>

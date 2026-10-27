@@ -38,7 +38,6 @@ const EXPECTED_AAPL_TILES = [
   'ExchangeNMSNASDAQ Global Select Market',
   'MarketUS Marketus_market',
   'CurrencyUSDUS Dollar',
-  'Languageen-USAmerican English',
 ];
 
 function buildService(local: StockProvider = createLocalStockProvider(loadLocalJson)) {
@@ -64,6 +63,21 @@ const periodRadio = (label: string | RegExp) =>
 const fetchButton = () => screen.getByRole('button', { name: 'Performance' });
 
 describe('App', () => {
+  it('styles the page header like the past-performance toolbar (dark, white bold text)', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    const header = screen.getByTestId('app-header');
+    expect(header).toContainElement(screen.getByRole('heading', { level: 1, name: 'Market Watch & Analytics' }));
+
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    const toolbar = screen.getByTestId('past-performance-toolbar');
+
+    for (const prop of ['backgroundColor', 'color', 'fontWeight', 'paddingLeft', 'paddingTop'] as const) {
+      expect(getComputedStyle(header)[prop]).toBe(getComputedStyle(toolbar)[prop]);
+    }
+    expect(getComputedStyle(header).backgroundColor).toBe('rgb(33, 33, 33)');
+  });
+
   it('renders the detail tiles from GET /stock/{symbol} for the live API source', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('aapl', 'api');

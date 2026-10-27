@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Box, Container, Typography } from '@mui/material';
+import { Box, Container, Paper, Typography } from '@mui/material';
+import { DARK_TOOLBAR_SX } from './components/darkToolbar.ts';
 import LookupForm from './components/LookupForm.tsx';
 import StockDetailCards from './components/StockDetailCards.tsx';
 import PastPerformanceSection from './components/PastPerformanceSection.tsx';
@@ -73,9 +74,11 @@ export default function App({ service, lookupOptions }: AppProps) {
 
   return (
     <Container maxWidth={false} sx={{ py: 2, px: { xs: 2, md: 3 } }}>
-      <Typography variant="h5" component="h1" sx={{ mb: 1.5 }}>
-        Market Watch &amp; Analytics
-      </Typography>
+      <Paper data-testid="app-header" sx={{ ...DARK_TOOLBAR_SX, mb: 1.5 }}>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: 'inherit' }}>
+          Market Watch &amp; Analytics
+        </Typography>
+      </Paper>
 
       <LookupForm
         symbol={symbol}

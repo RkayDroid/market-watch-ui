@@ -16,7 +16,7 @@ const full: StockDetails = {
 };
 
 describe('StockDetailCards', () => {
-  it('renders a tile for every field of the /stock/{symbol} payload', () => {
+  it('renders a tile for every displayed field of the /stock/{symbol} payload', () => {
     render(<StockDetailCards details={full} />);
 
     expect(screen.getByTestId('summary-symbol')).toHaveTextContent('AAPL');
@@ -31,14 +31,13 @@ describe('StockDetailCards', () => {
     expect(screen.getByTestId('detail-market-secondary')).toHaveTextContent('us_market');
     expect(screen.getByTestId('detail-currency')).toHaveTextContent('USD');
     expect(screen.getByTestId('detail-currency-secondary')).toHaveTextContent('US Dollar');
-    expect(screen.getByTestId('detail-language')).toHaveTextContent('en-US');
-    expect(screen.getByTestId('detail-language-secondary')).toHaveTextContent('American English');
+    expect(screen.queryByTestId('detail-language')).not.toBeInTheDocument(); // deliberately not shown
   });
 
   it('lays the tiles out in order inside a single grid', () => {
     render(<StockDetailCards details={full} />);
     const grid = screen.getByTestId('detail-tiles');
-    expect(grid.children).toHaveLength(8);
+    expect(grid.children).toHaveLength(7);
     expect(Array.from(grid.children).map((tile) => tile.textContent)).toEqual([
       'SymbolAAPL',
       'CompanyAppleApple Inc.',
@@ -47,7 +46,6 @@ describe('StockDetailCards', () => {
       'ExchangeNMSNASDAQ Global Select Market',
       'MarketUS Marketus_market',
       'CurrencyUSDUS Dollar',
-      'Languageen-USAmerican English',
     ]);
   });
 
@@ -71,7 +69,6 @@ describe('StockDetailCards', () => {
     );
     expect(screen.queryByTestId('detail-exchange-secondary')).not.toBeInTheDocument();
     expect(screen.queryByTestId('detail-currency-secondary')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('detail-language-secondary')).not.toBeInTheDocument();
     expect(screen.getByTestId('detail-fullday-price')).toHaveTextContent('QQQ 1.00'); // Intl's own form for unknown codes
   });
 

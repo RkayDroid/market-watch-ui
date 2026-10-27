@@ -46,7 +46,7 @@ export function formatMarket(market: string): string {
     .join(' ');
 }
 
-function displayName(type: 'currency' | 'language', code: string): string | undefined {
+function displayName(type: 'currency', code: string): string | undefined {
   try {
     const name = new Intl.DisplayNames([LOCALE], { type, fallback: 'none' }).of(code);
     // Some engines echo the code back instead of honouring `fallback: 'none'`.
@@ -59,11 +59,6 @@ function displayName(type: 'currency' | 'language', code: string): string | unde
 /** `"USD" → "US Dollar"`, or `undefined` for unknown codes. */
 export function describeCurrency(code: string): string | undefined {
   return displayName('currency', code.toUpperCase());
-}
-
-/** `"en-US" → "American English"`, or `undefined` for unknown tags. */
-export function describeLanguage(tag: string): string | undefined {
-  return displayName('language', tag);
 }
 
 const INTERVAL_UNITS: Readonly<Record<string, [singular: string, adverb: string]>> = {
