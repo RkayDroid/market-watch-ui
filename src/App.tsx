@@ -58,6 +58,15 @@ export default function App({ service, lookupOptions }: AppProps) {
     [startLookup, source],
   );
 
+  /** Results belong to the period they were fetched for; a new choice hides them until the next Fetch. */
+  const changePeriod = useCallback(
+    (next: PerformancePeriod) => {
+      setPeriod(next);
+      resetPerf();
+    },
+    [resetPerf],
+  );
+
   const fetchPerformance = useCallback(() => {
     if (data && loadedSource) void fetchPerf(data.symbol, period, loadedSource);
   }, [data, loadedSource, period, fetchPerf]);
@@ -87,7 +96,7 @@ export default function App({ service, lookupOptions }: AppProps) {
           <PastPerformanceSection
             details={data.details}
             period={period}
-            onPeriodChange={setPeriod}
+            onPeriodChange={changePeriod}
             onFetch={fetchPerformance}
             performance={performance.data}
             loading={performance.loading}

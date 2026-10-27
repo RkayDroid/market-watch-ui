@@ -83,7 +83,7 @@ describe('App', () => {
     expect(Array.from(grid.children).map((tile) => tile.textContent)).toEqual(EXPECTED_AAPL_TILES);
   });
 
-  it('shows a "Past Performance" section beneath the tiles, unpopulated until Fetch is clicked', async () => {
+  it('shows a "Past Performance" header beneath the tiles, with no chart or table until Fetch is clicked', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('META', 'local');
     await screen.findByTestId('summary-symbol');
@@ -93,9 +93,51 @@ describe('App', () => {
     expect(tiles.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
-    expect(within(section).getByTestId('price-chart-empty')).toBeInTheDocument();
-    expect(within(section).getAllByRole('row')).toHaveLength(1); // header only
+    expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
+    expect(within(section).queryByTestId('price-table-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+  });
+
+  it('changing the period hides the loaded chart and table until Fetch is clicked again', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(fetchButton()); // Day
+    await screen.findByTestId('summary-tiles');
+    expect(screen.getByText('Price Trend — Past Day')).toBeInTheDocument();
+
+    await userEvent.click(periodRadio('Month'));
+    expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(periodRadio('Month')).toBeChecked();
+
+    // Flipping back does not resurrect the old results either — only Fetch does.
+    await userEvent.click(periodRadio('Day'));
+    expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
+
+    await userEvent.click(fetchButton());
+    expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
+    expect(screen.getByText('Price Trend — Past Day')).toBeInTheDocument();
+  });
+
+  it('changing the period also dismisses a previous fetch error', async () => {
+    const local = createLocalStockProvider(loadLocalJson);
+    const failing: StockProvider = {
+      ...local,
+      async getHighLow() {
+        throw new Error('highlow exploded');
+      },
+    };
+    render(<App service={buildService(failing)} lookupOptions={{ minLoadingMs: 0 }} />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(fetchButton());
+    await screen.findByRole('alert');
+
+    await userEvent.click(periodRadio('Week'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('Fetch calls historic and highlow for the selected period and populates tiles, chart and table (live API)', async () => {
@@ -194,7 +236,7 @@ describe('App', () => {
     await lookup('META', 'local');
     expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('META');
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
-    expect(screen.getByTestId('price-chart-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
 
   it('fetches from the source the symbol was loaded with, even if the radio changed since', async () => {

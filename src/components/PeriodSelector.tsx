@@ -1,4 +1,4 @@
-import { FormControl, FormControlLabel, FormLabel, Radio, RadioGroup } from '@mui/material';
+import { Box, FormControlLabel, FormLabel, Radio, RadioGroup } from '@mui/material';
 import { isPerformancePeriod, PERFORMANCE_PERIODS, type PerformancePeriod } from '../types/performance.ts';
 
 export interface PeriodSelectorProps {
@@ -7,21 +7,19 @@ export interface PeriodSelectorProps {
   disabled?: boolean;
 }
 
-/** Controlled radio group for the "Past Performance" look-back window. */
+const LABEL_ID = 'performance-period-label';
+
+/** Controlled radio group for the "Past Performance" look-back window; label and radios on one line. */
 export default function PeriodSelector({ value, onChange, disabled = false }: PeriodSelectorProps) {
   return (
-    <FormControl
-      component="fieldset"
-      disabled={disabled}
-      sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1 }}
-      data-testid="period-selector"
-    >
-      <FormLabel component="legend" sx={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} data-testid="period-selector">
+      <FormLabel id={LABEL_ID} component="span" disabled={disabled} sx={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
         Period:
       </FormLabel>
       <RadioGroup
         row
         name="performance-period"
+        aria-labelledby={LABEL_ID}
         value={value}
         onChange={(e) => {
           if (isPerformancePeriod(e.target.value)) onChange(e.target.value);
@@ -34,11 +32,12 @@ export default function PeriodSelector({ value, onChange, disabled = false }: Pe
             value={option.value}
             control={<Radio size="small" sx={{ py: 0.5 }} />}
             label={option.label}
+            disabled={disabled}
             slotProps={{ typography: { variant: 'caption' } }}
             sx={{ mr: 1.5 }}
           />
         ))}
       </RadioGroup>
-    </FormControl>
+    </Box>
   );
 }

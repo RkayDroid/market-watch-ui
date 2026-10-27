@@ -1,4 +1,4 @@
-Market Watch UI — cumulative change set vs. the original baseline (rounds 1–4)
+Market Watch UI — cumulative change set vs. the original baseline (rounds 1–5)
 Unzip over the project root (market-watch-ui/), overwriting files, then DELETE the files below.
 
 === DELETE these files locally (if present) ===
@@ -130,5 +130,6 @@ src/utils/format.test.ts
 src/utils/format.ts
 src/utils/symbol.test.ts
 src/utils/symbol.ts
+vite.config.ts
 
 package.json / package-lock.json are unchanged — no npm install needed.

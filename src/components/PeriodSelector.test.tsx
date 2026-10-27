@@ -13,7 +13,7 @@ describe('PeriodSelector', () => {
     expect(screen.getByRole('radio', { name: 'Month' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Six Months' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: '5 Years' })).toBeInTheDocument();
-    expect(screen.getByText('Period:')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Period:' })).toBeInTheDocument();
   });
 
   it('reports the chosen period through onChange', async () => {

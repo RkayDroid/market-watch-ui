@@ -105,16 +105,17 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   fields: Symbol, Company (display name + long name), Full-day Price (formatted in the stock's currency),
   Sector, Exchange (code + name for known codes), Market (humanised), Currency and Language (code + name
   via `Intl.DisplayNames`). Tiles for absent fields are not rendered.
-- **Past Performance** — a single panel beneath the tiles. Its header bar holds the title, period radio group
-  (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups)
-  and a **Fetch** button. Fetch calls `/historic` and `/highlow` together for the loaded symbol, the
+- **Past Performance** — a single panel beneath the tiles. Its header bar holds the title, the period radio
+  group right beside it (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists
+  across lookups) and a **Fetch** button. Until Fetch is clicked the panel is just this header. Fetch calls `/historic` and `/highlow` together for the loaded symbol, the
   selected period and the source the symbol was loaded from, with its own loading indicator and error
   banner inside the panel. Results render as: Latest Price (with change over the period) plus High
   and Low tiles (with when they occurred) in a 15% column beside the price chart (fixed 280px height,
   container-measured via `useElementWidth`), then a divider and the dense interval table — titled by
   the loaded period and sampling interval (e.g. "Past Week (daily)"). The chart and table are rendered
-  `embedded` (no border of their own) so the group reads as one unit. Before the first fetch they
-  render empty; looking up another symbol clears the results. Stacks vertically on small screens.
+  `embedded` (no border of their own) so the group reads as one unit. Results belong to the period they
+  were fetched for: changing the radio (or looking up another symbol) removes them, and nothing is shown
+  again until the next Fetch. Stacks vertically on small screens.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even
   the instant local source gives visible feedback. Failures render as a styled `ErrorBanner` with a
@@ -132,7 +133,7 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 | --- | --- |
 | `00-initial.png` | Empty state; "Find" disabled until a symbol is entered |
 | `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
-| `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the Past Performance section before fetching |
+| `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the Past Performance header before fetching |
 | `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Fetch: high/low tiles, chart and table for the period (offline fixtures) |
 | `live-META.png` | Same via the live API (`/stock`, `/historic`, `/highlow` served by a stub), Week |
 | `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |

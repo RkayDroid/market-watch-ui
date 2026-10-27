@@ -37,19 +37,20 @@ function renderSection(overrides: Partial<PastPerformanceSectionProps> = {}) {
 }
 
 describe('PastPerformanceSection', () => {
-  it('is a labelled section with the period selector and a Fetch button, chart and table empty before fetching', () => {
+  it('is just a header (title, period selector, Fetch) before anything is fetched', () => {
     renderSection();
 
     const section = screen.getByRole('region', { name: 'Past Performance' });
     expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Past Performance');
+    expect(within(section).getByRole('radiogroup', { name: 'Period:' })).toBeInTheDocument();
     expect(within(section).getByRole('radio', { name: 'Day' })).toBeChecked();
     expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
 
-    expect(within(section).getByTestId('price-chart-empty')).toHaveTextContent('No price data to plot.');
-    expect(within(section).getByText('Price Trend')).toBeInTheDocument();
-    expect(within(section).getByText('Price Intervals')).toBeInTheDocument();
-    expect(within(section).getAllByRole('row')).toHaveLength(1); // header only
+    expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
+    expect(within(section).queryByTestId('price-table-panel')).not.toBeInTheDocument();
+    expect(within(section).queryByTestId('overview-row')).not.toBeInTheDocument();
     expect(within(section).queryByTestId('summary-tiles')).not.toBeInTheDocument();
+    expect(within(section).queryByRole('table')).not.toBeInTheDocument();
   });
 
   it('forwards period changes and Fetch clicks', async () => {
@@ -71,6 +72,7 @@ describe('PastPerformanceSection', () => {
     expect(screen.getByTestId('fetch-performance')).toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Day' })).toBeDisabled();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
 
   it('renders the error banner inside the section', () => {
@@ -78,6 +80,7 @@ describe('PastPerformanceSection', () => {
     const section = screen.getByRole('region', { name: 'Past Performance' });
     expect(within(section).getByRole('alert')).toHaveTextContent('Live API timed out');
     expect(within(section).getByRole('button', { name: 'Fetch' })).toBeEnabled();
+    expect(within(section).queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
 
   it('populates the summary tiles, chart and table from the loaded performance, titled by its period', () => {

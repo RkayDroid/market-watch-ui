@@ -30,9 +30,9 @@ export interface PastPerformanceSectionProps {
 export const PAST_PERFORMANCE_HEADING_ID = 'past-performance-heading';
 
 /**
- * "Past Performance" as one panel: a header bar (title, period selector, Fetch), then —
- * separated by dividers — the summary tiles beside the price chart, and the interval table.
- * Until the first fetch the chart and table render their empty states.
+ * "Past Performance" as one panel: a header bar (title, period selector, Fetch) and — only
+ * once a fetch is in flight, failed or loaded — the summary tiles beside the price chart and
+ * the interval table. Before the first fetch the panel is just its header.
  */
 export default function PastPerformanceSection({
   details,
@@ -44,12 +44,11 @@ export default function PastPerformanceSection({
   pendingPeriod,
   error,
 }: PastPerformanceSectionProps) {
-  const points = performance?.points ?? [];
-  const loadedLabel = performance ? `Past ${performancePeriodLabel(performance.period)}` : null;
-  const chartTitle = loadedLabel ? `Price Trend — ${loadedLabel}` : 'Price Trend';
-  const tableTitle = loadedLabel
-    ? `Price Intervals — ${loadedLabel}${performance?.interval ? ` (${describeInterval(performance.interval)})` : ''}`
-    : 'Price Intervals';
+  const loadedLabel = performance ? `Past ${performancePeriodLabel(performance.period)}` : '';
+  const chartTitle = `Price Trend — ${loadedLabel}`;
+  const tableTitle = `Price Intervals — ${loadedLabel}${
+    performance?.interval ? ` (${describeInterval(performance.interval)})` : ''
+  }`;
 
   return (
     <Paper
@@ -69,9 +68,9 @@ export default function PastPerformanceSection({
           bgcolor: 'action.hover',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto' }}>
-          <HistoryIcon color="primary" fontSize="small" />
-          <Typography variant="subtitle1" component="h2" id={PAST_PERFORMANCE_HEADING_ID}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 1 }}>
+          <HistoryIcon color="primary" />
+          <Typography variant="h6" component="h2" id={PAST_PERFORMANCE_HEADING_ID} sx={{ fontWeight: 600 }}>
             Past Performance
           </Typography>
         </Box>
@@ -89,16 +88,18 @@ export default function PastPerformanceSection({
           {loading ? <CircularProgress size={18} color="inherit" /> : 'Fetch'}
         </Button>
       </Box>
-      <Divider />
 
       {error && (
-        <Box sx={{ p: 2, pb: 0 }}>
-          <ErrorBanner error={error} />
-        </Box>
+        <>
+          <Divider />
+          <Box sx={{ p: 2 }}>
+            <ErrorBanner error={error} />
+          </Box>
+        </>
       )}
 
-      {loading ? (
-        <Box sx={{ p: 2 }}>
+      {loading && (
+        <Box sx={{ p: 2, pt: 0 }}>
           <LoadingIndicator
             symbol={details.symbol}
             subject="past performance"
@@ -108,8 +109,11 @@ export default function PastPerformanceSection({
             py={3}
           />
         </Box>
-      ) : (
+      )}
+
+      {performance && !loading && (
         <>
+          <Divider />
           <Box
             data-testid="overview-row"
             sx={{
@@ -120,17 +124,15 @@ export default function PastPerformanceSection({
               flexDirection: { xs: 'column', md: 'row' },
             }}
           >
-            {performance && (
-              <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
-                <StockSummaryCards performance={performance} currency={details.currency} />
-              </Box>
-            )}
+            <Box sx={{ width: { xs: '100%', md: LAYOUT.overviewTiles }, flexShrink: 0 }}>
+              <StockSummaryCards performance={performance} currency={details.currency} />
+            </Box>
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <PriceChart history={points} title={chartTitle} currency={details.currency} embedded />
+              <PriceChart history={performance.points} title={chartTitle} currency={details.currency} embedded />
             </Box>
           </Box>
           <Divider />
-          <HourlyPriceTable history={points} title={tableTitle} currency={details.currency} embedded />
+          <HourlyPriceTable history={performance.points} title={tableTitle} currency={details.currency} embedded />
         </>
       )}
     </Paper>
