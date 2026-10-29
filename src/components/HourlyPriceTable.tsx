@@ -26,7 +26,17 @@ interface HourlyPriceTableProps {
 
 export const DEFAULT_TABLE_TITLE = 'Price Intervals';
 
-/** Dense table of sampled prices with a trend arrow per row (one row per interval). */
+const PRICE_COLUMNS: readonly { key: 'open' | 'high' | 'low' | 'price'; header: string }[] = [
+  { key: 'open', header: 'Open' },
+  { key: 'high', header: 'High' },
+  { key: 'low', header: 'Low' },
+  { key: 'price', header: 'Close' },
+];
+
+/**
+ * Dense table of the period's candles — open, high, low and close per interval — with a
+ * trend arrow per row (close vs. the previous close, matching the chart).
+ */
 export default function HourlyPriceTable({
   history,
   title = DEFAULT_TABLE_TITLE,
@@ -48,6 +58,9 @@ export default function HourlyPriceTable({
       >
         <TimelineIcon color="primary" fontSize="small" />
         <Typography variant="subtitle1">{title}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }} data-testid="price-table-currency">
+          Prices in {currency}
+        </Typography>
       </Box>
       <TableContainer>
         <Table
@@ -58,7 +71,9 @@ export default function HourlyPriceTable({
           <TableHead sx={{ backgroundColor: 'action.hover' }}>
             <TableRow>
               <TableCell><strong>Timestamp</strong></TableCell>
-              <TableCell align="right"><strong>Rate ({currency})</strong></TableCell>
+              {PRICE_COLUMNS.map((column) => (
+                <TableCell key={column.key} align="right"><strong>{column.header}</strong></TableCell>
+              ))}
               <TableCell align="center"><strong>Trend</strong></TableCell>
             </TableRow>
           </TableHead>
@@ -66,7 +81,11 @@ export default function HourlyPriceTable({
             {history.map((row, index) => (
               <TableRow key={`${row.label}-${index}`} hover>
                 <TableCell>{row.label}</TableCell>
-                <TableCell align="right">{formatPrice(row.price, currency)}</TableCell>
+                {PRICE_COLUMNS.map((column) => (
+                  <TableCell key={column.key} align="right" data-testid={`price-cell-${column.key}`}>
+                    {formatPrice(row[column.key], currency)}
+                  </TableCell>
+                ))}
                 <TableCell align="center" sx={{ '& svg': { display: 'block', mx: 'auto', fontSize: 16 } }}>
                   <TrendIndicator trend={row.trend} />
                 </TableCell>

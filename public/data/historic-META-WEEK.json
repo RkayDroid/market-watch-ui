@@ -1,29 +1,49 @@
 {
-  "ticker": "META",
-  "period": "WEEK",
-  "interval": "1d",
-  "count": 5,
-  "cached": false,
-  "data": [
-    {
-      "datetime": "2026-10-19",
-      "price": 705.44
+    "ticker": "META",
+    "symbol": "META",
+    "period": "WEEK",
+    "interval": "1d",
+    "referenceDate": "2026-10-28",
+    "window": {
+        "start": "2026-10-22",
+        "end": "2026-10-28"
     },
-    {
-      "datetime": "2026-10-20",
-      "price": 694.25
-    },
-    {
-      "datetime": "2026-10-21",
-      "price": 697.52
-    },
-    {
-      "datetime": "2026-10-22",
-      "price": 648.85
-    },
-    {
-      "datetime": "2026-10-23",
-      "price": 642.62
-    }
-  ]
+    "count": 5,
+    "data": [
+        {
+            "datetime": "2026-10-22",
+            "open": 676.35,
+            "high": 681.07,
+            "low": 639.69,
+            "close": 648.85
+        },
+        {
+            "datetime": "2026-10-23",
+            "open": 638.18,
+            "high": 648.04,
+            "low": 633.27,
+            "close": 642.62
+        },
+        {
+            "datetime": "2026-10-26",
+            "open": 638.36,
+            "high": 647.69,
+            "low": 627.8,
+            "close": 630.56
+        },
+        {
+            "datetime": "2026-10-27",
+            "open": 627.07,
+            "high": 628.46,
+            "low": 619.21,
+            "close": 620.19
+        },
+        {
+            "datetime": "2026-10-28",
+            "open": 621.64,
+            "high": 624.42,
+            "low": 609.0,
+            "close": 612.49
+        }
+    ]
 }

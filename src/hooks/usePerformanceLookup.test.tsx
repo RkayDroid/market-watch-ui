@@ -38,10 +38,10 @@ describe('usePerformanceLookup', () => {
     expect(result.current).toMatchObject({ data: null, loading: false, pendingPeriod: null, error: null });
 
     act(() => {
-      void result.current.fetch('AAPL', 'WEEK', 'api');
+      void result.current.fetch('AAPL', 'WEEK', 'api', '2026-10-01');
     });
     expect(result.current).toMatchObject({ loading: true, pendingPeriod: 'WEEK' });
-    expect(performance).toHaveBeenCalledWith('AAPL', 'WEEK', 'api');
+    expect(performance).toHaveBeenCalledWith('AAPL', 'WEEK', 'api', '2026-10-01');
 
     d.resolve(perf('WEEK'));
     await waitFor(() => expect(result.current.loading).toBe(false));

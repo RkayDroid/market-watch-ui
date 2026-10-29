@@ -15,7 +15,7 @@ export interface PerformanceLookupState {
 }
 
 export interface UsePerformanceLookupResult extends PerformanceLookupState {
-  fetch: (symbol: string, period: PerformancePeriod, source: DataSource) => Promise<void>;
+  fetch: (symbol: string, period: PerformancePeriod, source: DataSource, referenceDate?: string) => Promise<void>;
   /** Clears results, errors and any in-flight request (e.g. when a different symbol is looked up). */
   reset: () => void;
 }
@@ -27,7 +27,7 @@ export interface UsePerformanceLookupOptions {
 const IDLE: PerformanceLookupState = { data: null, loading: false, pendingPeriod: null, error: null };
 
 /**
- * Manages the async lifecycle of the "Past Performance" fetch (historic + high/low).
+ * Manages the async lifecycle of the "Past Performance" fetch (`/historic`).
  * Mirrors {@link useStockLookup}: only the most recent request may update state.
  */
 export function usePerformanceLookup(
@@ -51,14 +51,17 @@ export function usePerformanceLookup(
   }, []);
 
   const fetch = useCallback(
-    async (symbol: string, period: PerformancePeriod, source: DataSource) => {
+    async (symbol: string, period: PerformancePeriod, source: DataSource, referenceDate?: string) => {
       const id = ++requestId.current;
       const isCurrent = () => mounted.current && id === requestId.current;
 
       setState({ ...IDLE, loading: true, pendingPeriod: period });
 
       try {
-        const data = await withMinimumDuration(service.performance(symbol, period, source), minLoadingMs);
+        const data = await withMinimumDuration(
+          service.performance(symbol, period, source, referenceDate),
+          minLoadingMs,
+        );
         if (isCurrent()) setState({ ...IDLE, data });
       } catch (err) {
         if (isCurrent()) setState({ ...IDLE, error: toLookupError(err) });

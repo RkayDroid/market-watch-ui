@@ -1,10 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { PastPerformance } from '../types/stock.ts';
 import PastPerformanceSection, { type PastPerformanceSectionProps } from './PastPerformanceSection.tsx';
 
 const details = { symbol: 'AAPL', currency: 'USD' };
+const TODAY = '2026-10-28';
 
 const performance: PastPerformance = {
   symbol: 'AAPL',
@@ -13,8 +14,8 @@ const performance: PastPerformance = {
   latestPrice: 110,
   changePercent: 10,
   points: [
-    { label: 'May 8, 2026', price: 100, trend: 'neutral' },
-    { label: 'Oct 23, 2026', price: 110, trend: 'up' },
+    { label: 'May 8, 2026', open: 99, high: 101, low: 98, price: 100, trend: 'neutral' },
+    { label: 'Oct 23, 2026', open: 100, high: 112, low: 99, price: 110, trend: 'up' },
   ],
   high: { price: 112, occurredAt: '2026-10-23' },
   low: { price: 98, occurredAt: '2026-05-08' },
@@ -23,6 +24,9 @@ const performance: PastPerformance = {
 function renderSection(overrides: Partial<PastPerformanceSectionProps> = {}) {
   const props: PastPerformanceSectionProps = {
     details,
+    referenceDate: '',
+    onReferenceDateChange: vi.fn(),
+    maxReferenceDate: TODAY,
     period: 'DAY',
     onPeriodChange: vi.fn(),
     onFetch: vi.fn(),
@@ -37,11 +41,12 @@ function renderSection(overrides: Partial<PastPerformanceSectionProps> = {}) {
 }
 
 describe('PastPerformanceSection', () => {
-  it('is just a toolbar (period selector, Performance button) before anything is fetched', () => {
+  it('is just a toolbar (reference date, period selector, Performance button) before anything is fetched', () => {
     renderSection();
 
     const section = screen.getByRole('region', { name: 'Past Performance' });
     expect(within(section).queryByRole('heading')).not.toBeInTheDocument(); // no visible title
+    expect(within(section).getByRole('textbox', { name: /reference date/i })).toHaveValue(''); // optional: blank until picked
     expect(within(section).getByRole('radiogroup', { name: 'Period:' })).toBeInTheDocument();
     expect(within(section).getByRole('radio', { name: 'Day' })).toBeChecked();
     expect(within(section).getByRole('button', { name: 'Performance' })).toBeEnabled();
@@ -64,6 +69,30 @@ describe('PastPerformanceSection', () => {
     expect(onFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('places the reference date before the period radios on the toolbar and forwards picks', () => {
+    const { onReferenceDateChange } = renderSection();
+    const toolbar = screen.getByTestId('past-performance-toolbar');
+    const date = within(toolbar).getByTestId('reference-date');
+    const periods = within(toolbar).getByTestId('period-selector');
+    expect(date.compareDocumentPosition(periods) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId('reference-date-native'), { target: { value: '2026-10-20' } });
+    expect(onReferenceDateChange).toHaveBeenLastCalledWith('2026-10-20');
+  });
+
+  it('shows the picked date and is happy to fetch with or without one', () => {
+    renderSection({ referenceDate: '2026-10-20' });
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toHaveValue('2026-10-20');
+    expect(screen.getByRole('button', { name: 'Performance' })).toBeEnabled();
+  });
+
+  it('blocks Performance and explains why while the reference date is invalid', () => {
+    renderSection({ referenceDate: '2026-10-29' });
+    expect(screen.getByRole('button', { name: 'Performance' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toBeInvalid();
+    expect(screen.getByText('Cannot be after today (2026-10-28).')).toBeInTheDocument();
+  });
+
   it('shows a loading indicator and disables the controls while fetching', () => {
     renderSection({ loading: true, pendingPeriod: 'FIVE_YEAR' });
 
@@ -72,6 +101,7 @@ describe('PastPerformanceSection', () => {
     expect(status).toHaveTextContent('for the past 5 years');
     expect(screen.getByTestId('fetch-performance')).toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Day' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toBeDisabled();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
@@ -98,6 +128,11 @@ describe('PastPerformanceSection', () => {
     expect(within(section).getByText('Price Intervals — Past Six Months (every 2 weeks)')).toBeInTheDocument();
     expect(within(section).getAllByRole('row')).toHaveLength(3);
     expect(within(section).getAllByRole('row')[2]).toHaveTextContent('Oct 23, 2026');
+  });
+
+  it('names the date the served window ends on in the chart title, so a stand-in window is visible', () => {
+    renderSection({ performance: { ...performance, referenceDate: '2026-02-02' }, referenceDate: '2026-05-05' });
+    expect(screen.getByText('Price Trend — Past Six Months to 2026-02-02')).toBeInTheDocument();
   });
 });
 

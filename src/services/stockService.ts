@@ -10,10 +10,16 @@ export interface StockService {
   /** Resolves a symbol's details (`GET /stock/{symbol}`). */
   lookup(symbol: string, source: DataSource): Promise<StockData>;
   /**
-   * Resolves the "Past Performance" view for a symbol and period by calling
-   * `GET /stock/{symbol}/historic?period=` and `GET /stock/{symbol}/highlow?period=` together.
+   * Resolves the "Past Performance" view for a symbol and period from
+   * `GET /stock/{symbol}/historic?period=` — the candles it returns also yield the high/low.
+   * `referenceDate` (`YYYY-MM-DD`) anchors the window on that day instead of today.
    */
-  performance(symbol: string, period: PerformancePeriod, source: DataSource): Promise<PastPerformance>;
+  performance(
+    symbol: string,
+    period: PerformancePeriod,
+    source: DataSource,
+    referenceDate?: string,
+  ): Promise<PastPerformance>;
 }
 
 export interface StockServiceOptions {
@@ -48,14 +54,10 @@ export function createStockService(
       return { symbol: details.symbol, details };
     },
 
-    async performance(rawSymbol, period, source) {
+    async performance(rawSymbol, period, source, referenceDate) {
       const symbol = requireSymbol(rawSymbol);
-      const provider = providers[source];
-      const [series, highLow] = await Promise.all([
-        provider.getPriceSeries(symbol, period),
-        provider.getHighLow(symbol, period),
-      ]);
-      return summarizePerformance(series, highLow, options.formatLabel);
+      const series = await providers[source].getPriceSeries(symbol, period, referenceDate || undefined);
+      return summarizePerformance(series, options.formatLabel);
     },
   };
 }

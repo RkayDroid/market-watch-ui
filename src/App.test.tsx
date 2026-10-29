@@ -1,5 +1,5 @@
 import { AxiosError, type AxiosResponse } from 'axios';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from './App.tsx';
@@ -17,14 +17,15 @@ const loadLocalJson: JsonLoader = async (path) => fixture(path.replace(/^data\//
 
 /**
  * Fake HTTP client standing in for the live API: serves AAPL from the captured responses
- * (details, historic and high/low for every period) and 404s everything else.
+ * (details and historic candles for every period) and 404s everything else.
  */
 const liveRequests: string[] = [];
 const fakeHttp: HttpClient = {
   get: async (url) => {
     liveRequests.push(url);
-    const m = /\/stock\/AAPL(?:\/(historic|highlow)\?period=([A-Z_]+))?$/.exec(url);
-    const data = m ? fixture(m[1] ? `${m[1]}-AAPL-${m[2]}.json` : 'detail-AAPL.json') : null;
+    const m = /\/stock\/AAPL(?:\/historic\?period=([A-Z_]+)(?:&referenceDate=(\d{4}-\d{2}-\d{2}))?)?$/.exec(url);
+    const variant = m?.[2] ? { '2025-10-10': '-1', '2026-02-02': '-2' }[m[2]] : '';
+    const data = m && variant !== undefined ? fixture(m[1] ? `historic-AAPL-${m[1]}${variant}.json` : 'detail-AAPL.json') : null;
     if (data) return { data };
     throw new AxiosError('not found', undefined, undefined, undefined, { status: 404 } as AxiosResponse);
   },
@@ -33,7 +34,7 @@ const fakeHttp: HttpClient = {
 const EXPECTED_AAPL_TILES = [
   'SymbolAAPL',
   'CompanyAppleApple Inc.',
-  'Full-day Price$347.73USD',
+  'Full-day Price$343.83USD',
   'SectorTechnology',
   'ExchangeNMSNASDAQ Global Select Market',
   'MarketUS Marketus_market',
@@ -119,7 +120,7 @@ describe('App', () => {
     await screen.findByTestId('summary-symbol');
     await userEvent.click(fetchButton()); // Day
     await screen.findByTestId('summary-tiles');
-    expect(screen.getByText('Price Trend — Past Day')).toBeInTheDocument();
+    expect(screen.getByText('Price Trend — Past Day to 2026-10-28')).toBeInTheDocument();
 
     await userEvent.click(periodRadio('Month'));
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
@@ -133,15 +134,15 @@ describe('App', () => {
 
     await userEvent.click(fetchButton());
     expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
-    expect(screen.getByText('Price Trend — Past Day')).toBeInTheDocument();
+    expect(screen.getByText('Price Trend — Past Day to 2026-10-28')).toBeInTheDocument();
   });
 
   it('changing the period also dismisses a previous fetch error', async () => {
     const local = createLocalStockProvider(loadLocalJson);
     const failing: StockProvider = {
       ...local,
-      async getHighLow() {
-        throw new Error('highlow exploded');
+      async getPriceSeries() {
+        throw new Error('historic exploded');
       },
     };
     render(<App service={buildService(failing)} lookupOptions={{ minLoadingMs: 0 }} />);
@@ -154,7 +155,7 @@ describe('App', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('Fetch calls historic and highlow for the selected period and populates tiles, chart and table (live API)', async () => {
+  it('Fetch calls historic once for the selected period and populates tiles (high/low included), chart and table (live API)', async () => {
     liveRequests.length = 0;
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('AAPL', 'api');
@@ -164,28 +165,35 @@ describe('App', () => {
     await userEvent.click(fetchButton());
 
     expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
-    expect(liveRequests.slice(1).sort()).toEqual([
-      'https://api.test/v1/stock/AAPL/highlow?period=WEEK',
-      'https://api.test/v1/stock/AAPL/historic?period=WEEK',
-    ]);
+    expect(liveRequests.slice(1)).toEqual(['https://api.test/v1/stock/AAPL/historic?period=WEEK']);
 
-    // Tiles: latest price + change over the week (history-AAPL-WEEK), high/low (highlow-AAPL-WEEK).
-    expect(screen.getByTestId('summary-price')).toHaveTextContent('$347.73');
-    expect(screen.getByTestId('summary-change')).toHaveTextContent('1.4%'); // 342.94 → 347.73
+    // Tiles: latest close + change over the week, and the high/low derived from the candles.
+    expect(screen.getByTestId('summary-price')).toHaveTextContent('$343.83');
+    expect(screen.getByTestId('summary-change')).toHaveTextContent('-1.26%'); // 348.22 → 343.83
     expect(screen.getByTestId('summary-high')).toHaveTextContent('$351.73');
-    expect(screen.getByTestId('summary-low')).toHaveTextContent('$338.70');
+    expect(screen.getByTestId('summary-high-secondary')).toHaveTextContent('Oct 23, 2026'); // the candle's date
+    expect(screen.getByTestId('summary-low')).toHaveTextContent('$341.03');
+    expect(screen.getByTestId('summary-low-secondary')).toHaveTextContent('Oct 26, 2026');
 
-    // Chart and table: one point per sample of the 5-day series.
+    // Chart and table: one point per candle of the 5-day series, plotting the closes.
     const chart = screen.getByTestId('price-chart');
-    expect(chart).toHaveAttribute('data-direction', 'up');
+    expect(chart).toHaveAttribute('data-direction', 'down');
     expect(within(chart).getAllByTestId('price-point')).toHaveLength(5);
-    expect(screen.getByText('Price Trend — Past Week')).toBeInTheDocument();
+    expect(screen.getByText('Price Trend — Past Week to 2026-10-28')).toBeInTheDocument();
     expect(screen.getByText('Price Intervals — Past Week (daily)')).toBeInTheDocument();
     const rows = screen.getAllByRole('row');
     expect(rows).toHaveLength(6); // header + 5 days
-    expect(rows[1]).toHaveTextContent('2026-10-19'); // formatLabel is identity in tests
-    expect(rows[1]).toHaveTextContent('$342.94');
-    expect(rows[5]).toHaveTextContent('$347.73');
+    expect(rows[1]).toHaveTextContent('2026-10-22'); // formatLabel is identity in tests
+    expect(within(rows[1]).getAllByRole('cell').map((td) => td.textContent)).toEqual([
+      '2026-10-22',
+      '$344.94', // open
+      '$348.36', // high
+      '$342.28', // low
+      '$348.22', // close
+      'neutral',
+    ]);
+    expect(screen.getByTestId('price-table-currency')).toHaveTextContent('Prices in USD');
+    expect(rows[5]).toHaveTextContent('$343.83');
   });
 
   it('Fetch works the same against the offline fixtures, for every period', async () => {
@@ -196,15 +204,15 @@ describe('App', () => {
     await userEvent.click(fetchButton()); // default period: Day
     expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
     expect(screen.getByText('Price Intervals — Past Day (hourly)')).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(15); // header + 14 hourly samples
-    expect(screen.getByTestId('summary-high')).toHaveTextContent('$321.23');
+    expect(screen.getAllByRole('row')).toHaveLength(8); // header + 7 hourly candles
+    expect(screen.getByTestId('summary-high')).toHaveTextContent('$323.13');
 
     await userEvent.click(periodRadio('5 Years'));
     await userEvent.click(fetchButton());
     await screen.findByText('Price Intervals — Past 5 Years (monthly)');
-    expect(screen.getAllByRole('row')).toHaveLength(62); // header + 61 monthly samples
+    expect(screen.getAllByRole('row')).toHaveLength(62); // header + 61 monthly candles
     expect(screen.getByTestId('summary-low')).toHaveTextContent('$82.67');
-    expect(screen.getByTestId('summary-low-secondary')).toHaveTextContent('Nov 3, 2022'); // bare date, no TZ shift
+    expect(screen.getByTestId('summary-low-secondary')).toHaveTextContent('Nov 30, 2022'); // bare date, no TZ shift
   });
 
   it('shows a loading state during the fetch and an error inside the section when it fails', async () => {
@@ -213,10 +221,10 @@ describe('App', () => {
     const gate = new Promise<void>((resolve) => (release = resolve));
     const flaky: StockProvider = {
       ...local,
-      async getHighLow(symbol, period) {
+      async getPriceSeries(symbol, period) {
         await gate;
-        if (period === 'YEAR') throw new Error('highlow exploded');
-        return local.getHighLow(symbol, period);
+        if (period === 'YEAR') throw new Error('historic exploded');
+        return local.getPriceSeries(symbol, period);
       },
     };
     render(<App service={buildService(flaky)} lookupOptions={{ minLoadingMs: 0 }} />);
@@ -232,7 +240,7 @@ describe('App', () => {
 
     release();
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('highlow exploded');
+    expect(alert).toHaveTextContent('historic exploded');
     expect(screen.getByRole('region', { name: /past performance/i })).toContainElement(alert);
     expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
     expect(fetchButton()).toBeEnabled();
@@ -266,6 +274,118 @@ describe('App', () => {
     expect(liveRequests).toEqual([]);
   });
 
+  it('starts with no reference date, shows a picked one as YYYY-MM-DD, and keeps it across lookups', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} today="2026-10-28" />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+
+    const field = screen.getByRole('textbox', { name: /reference date/i });
+    expect(field).toHaveValue('');
+    expect(screen.getByTestId('past-performance-toolbar')).toContainElement(field);
+    // Laid out before the period radios on the same toolbar.
+    expect(
+      screen.getByTestId('reference-date').compareDocumentPosition(screen.getByTestId('period-selector')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(fetchButton()).toBeEnabled(); // optional: fetching without a date is fine
+
+    fireEvent.change(screen.getByTestId('reference-date-native'), { target: { value: '2026-10-01' } });
+    expect(field).toHaveValue('2026-10-01');
+
+    await lookup('GOOG', 'local');
+    await screen.findByTestId('summary-symbol');
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toHaveValue('2026-10-01');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear reference date' }));
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toHaveValue('');
+  });
+
+  it('caps the calendar at today and refuses a later date, re-enabling Performance once corrected', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} today="2026-10-28" />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    const native = screen.getByTestId('reference-date-native');
+    expect(native).toHaveAttribute('max', '2026-10-28');
+
+    // The picker greys out later days; should one arrive anyway, it is rejected.
+    fireEvent.change(native, { target: { value: '2026-10-29' } });
+    const field = screen.getByRole('textbox', { name: /reference date/i });
+    expect(field).toBeInvalid();
+    expect(screen.getByText('Cannot be after today (2026-10-28).')).toBeInTheDocument();
+    expect(fetchButton()).toBeDisabled();
+
+    fireEvent.change(native, { target: { value: '2026-10-28' } });
+    expect(field).toBeValid();
+    expect(fetchButton()).toBeEnabled();
+  });
+
+  it('changing the reference date hides loaded results until Performance is clicked again', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} today="2026-10-28" />);
+    await lookup('AAPL', 'local');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+
+    fireEvent.change(screen.getByTestId('reference-date-native'), { target: { value: '2026-10-27' } });
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toHaveValue('2026-10-27');
+    expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument();
+  });
+
+  it('sends the picked reference date as &referenceDate= to the live API, and omits it when none is picked', async () => {
+    liveRequests.length = 0;
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} today="2026-10-28" />);
+    await lookup('AAPL', 'api');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(periodRadio('Week'));
+
+    await userEvent.click(fetchButton()); // no date → no parameter
+    await screen.findByTestId('summary-tiles');
+    expect(screen.getByText('Price Trend — Past Week to 2026-10-28')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('reference-date-native'), { target: { value: '2025-10-10' } });
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+    expect(screen.getByText('Price Trend — Past Week to 2025-10-10')).toBeInTheDocument();
+    expect(screen.getByTestId('summary-price')).toHaveTextContent('$244.37'); // last close of the 2025-10-10 window
+    expect(screen.getByTestId('summary-high')).toHaveTextContent('$258.12');
+    expect(screen.getAllByRole('row')[5]).toHaveTextContent('2025-10-10');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear reference date' }));
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+
+    expect(liveRequests.slice(1)).toEqual([
+      'https://api.test/v1/stock/AAPL/historic?period=WEEK',
+      'https://api.test/v1/stock/AAPL/historic?period=WEEK&referenceDate=2025-10-10',
+      'https://api.test/v1/stock/AAPL/historic?period=WEEK',
+    ]);
+  });
+
+  it('offline: serves the 2025-10-10 and 2026-02-02 captures for those dates, and the 2026-02-02 one for any other date', async () => {
+    render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} today="2026-10-28" />);
+    await lookup('GOOG', 'local');
+    await screen.findByTestId('summary-symbol');
+    await userEvent.click(periodRadio('Week'));
+    const native = screen.getByTestId('reference-date-native');
+
+    fireEvent.change(native, { target: { value: '2025-10-10' } });
+    await userEvent.click(fetchButton());
+    await screen.findByText('Price Trend — Past Week to 2025-10-10');
+    expect(screen.getAllByRole('row')[5]).toHaveTextContent('2025-10-10');
+
+    fireEvent.change(native, { target: { value: '2026-02-02' } });
+    await userEvent.click(fetchButton());
+    await screen.findByText('Price Trend — Past Week to 2026-02-02');
+    expect(screen.getAllByRole('row')[5]).toHaveTextContent('2026-02-02');
+
+    fireEvent.change(native, { target: { value: '2026-06-15' } });
+    await userEvent.click(fetchButton());
+    // Stand-in: the title says which window was really served.
+    await screen.findByText('Price Trend — Past Week to 2026-02-02');
+    expect(screen.getByRole('textbox', { name: /reference date/i })).toHaveValue('2026-06-15');
+    expect(screen.getAllByRole('row')[5]).toHaveTextContent('2026-02-02');
+  });
+
   it('offers the six performance periods with Day selected by default', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
     await lookup('AAPL', 'api');
@@ -293,19 +413,27 @@ describe('App', () => {
 
   it('shows a not-found error with offline suggestions for symbols without a fixture', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
-    await lookup('TSLA', 'local');
+    await lookup('MSFT', 'local');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Symbol not found');
-    expect(alert).toHaveTextContent('"TSLA" is not available from this data source.');
-    expect(within(alert).getAllByRole('button').map((b) => b.textContent)).toEqual(['AAPL', 'GOOG', 'META']);
+    expect(alert).toHaveTextContent('"MSFT" is not available from this data source.');
+    expect(within(alert).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'AAPL',
+      'BRK.A',
+      'GOOG',
+      'META',
+      'NFLX',
+      'RBLX',
+      'TSLA',
+    ]);
     expect(screen.queryByTestId('summary-symbol')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /past performance/i })).not.toBeInTheDocument();
   });
 
   it('clicking a suggested symbol fills the box and runs the lookup', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
-    await lookup('TSLA', 'local');
+    await lookup('MSFT', 'local');
     await userEvent.click(await screen.findByRole('button', { name: 'GOOG' }));
 
     expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('GOOG');
@@ -343,7 +471,7 @@ describe('App', () => {
 
   it('clears a previous error on a successful lookup', async () => {
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
-    await lookup('TSLA', 'local');
+    await lookup('MSFT', 'local');
     await screen.findByRole('alert');
 
     await lookup('META', 'local');

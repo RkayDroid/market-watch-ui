@@ -1,7 +1,6 @@
 import axios, { isAxiosError } from 'axios';
 import type { PerformancePeriod } from '../../types/performance.ts';
-import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
-import { parseHighLow } from '../highLow.ts';
+import type { PriceSeries, StockDetails } from '../../types/stock.ts';
 import { InvalidPayloadError } from '../payload.ts';
 import { parsePriceSeries } from '../priceSeries.ts';
 import { parseStockDetails } from '../stockDetails.ts';
@@ -16,7 +15,7 @@ export const LOCAL_DATA_DIR = 'data';
  * Symbols with fixtures under `public/data/`. Static hosting cannot list a directory,
  * so this is maintained by hand and checked against the folder by `localFixtures.test.ts`.
  */
-export const OFFLINE_SYMBOLS: readonly string[] = ['AAPL', 'GOOG', 'META'];
+export const OFFLINE_SYMBOLS: readonly string[] = ['AAPL', 'BRK.A', 'GOOG', 'META', 'NFLX', 'RBLX', 'TSLA'];
 
 /* Fixture paths, relative to the Vite base URL. Names mirror the live endpoints. */
 
@@ -25,14 +24,26 @@ export function localDetailsPath(symbol: string): string {
   return `${LOCAL_DATA_DIR}/detail-${encodeURIComponent(symbol)}.json`;
 }
 
-/** `data/historic-{SYMBOL}-{PERIOD}.json` — the `/stock/{symbol}/historic?period=` payload. */
-export function localHistoricPath(symbol: string, period: PerformancePeriod): string {
-  return `${LOCAL_DATA_DIR}/historic-${encodeURIComponent(symbol)}-${period}.json`;
-}
+/**
+ * Reference dates the offline data was captured for, and the fixture suffix holding each.
+ * Any other reference date is served from {@link OFFLINE_FALLBACK_REFERENCE_DATE}'s capture.
+ */
+export const OFFLINE_REFERENCE_DATES: Readonly<Record<string, number>> = {
+  '2025-10-10': 1,
+  '2026-02-02': 2,
+};
+export const OFFLINE_FALLBACK_REFERENCE_DATE = '2026-02-02';
 
-/** `data/highlow-{SYMBOL}-{PERIOD}.json` — the `/stock/{symbol}/highlow?period=` payload. */
-export function localHighLowPath(symbol: string, period: PerformancePeriod): string {
-  return `${LOCAL_DATA_DIR}/highlow-${encodeURIComponent(symbol)}-${period}.json`;
+/**
+ * `data/historic-{SYMBOL}-{PERIOD}.json` — the `/stock/{symbol}/historic?period=` payload.
+ * With a reference date: `…-{PERIOD}-1.json` for 2025-10-10, `…-2.json` for 2026-02-02, and the
+ * latter again for any other date (the offline set only has those two captures).
+ */
+export function localHistoricPath(symbol: string, period: PerformancePeriod, referenceDate?: string): string {
+  const base = `${LOCAL_DATA_DIR}/historic-${encodeURIComponent(symbol)}-${period}`;
+  if (!referenceDate) return `${base}.json`;
+  const variant = OFFLINE_REFERENCE_DATES[referenceDate] ?? OFFLINE_REFERENCE_DATES[OFFLINE_FALLBACK_REFERENCE_DATE];
+  return `${base}-${variant}.json`;
 }
 
 /** Loads the raw JSON at a fixture path, or `null` when the offline source has no such file. */
@@ -89,13 +100,12 @@ export function createLocalStockProvider(
     getDetails(symbol): Promise<StockDetails> {
       return load(localDetailsPath(symbol), symbol, parseStockDetails);
     },
-    getPriceSeries(symbol, period): Promise<PriceSeries> {
-      return load(localHistoricPath(symbol, period), symbol, (payload) =>
+    getPriceSeries(symbol, period, referenceDate): Promise<PriceSeries> {
+      // The fixture may be a stand-in for another date, so the served date is not checked
+      // against the requested one; the parser reports the date the capture is really for.
+      return load(localHistoricPath(symbol, period, referenceDate), symbol, (payload) =>
         parsePriceSeries(payload, { symbol, period }),
       );
-    },
-    getHighLow(symbol, period): Promise<HighLow> {
-      return load(localHighLowPath(symbol, period), symbol, (payload) => parseHighLow(payload, { symbol, period }));
     },
   };
 }

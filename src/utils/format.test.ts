@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeCurrency, describeExchange, describeInterval, formatMarket, formatPrice } from './format.ts';
+import { describeCandle, describeCurrency, describeExchange, describeInterval, formatMarket, formatPrice } from './format.ts';
 
 describe('formatPrice', () => {
   it('formats in the given currency with two decimals', () => {
@@ -71,5 +71,16 @@ describe('describeInterval', () => {
   it('returns unknown formats unchanged', () => {
     expect(describeInterval('tick')).toBe('tick');
     expect(describeInterval('')).toBe('');
+  });
+});
+
+describe('describeCandle', () => {
+  it('reads out the close, then high/low, in the given currency', () => {
+    expect(describeCandle({ label: 'Oct 21, 2026', high: 283, low: 274.7, price: 282.5 })).toBe(
+      'Oct 21, 2026: close $282.50 (high $283.00, low $274.70)',
+    );
+    expect(describeCandle({ label: 'd', high: 2, low: 0.5, price: 1.5 }, 'EUR')).toBe(
+      'd: close €1.50 (high €2.00, low €0.50)',
+    );
   });
 });

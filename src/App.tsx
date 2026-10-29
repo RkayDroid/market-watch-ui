@@ -14,12 +14,15 @@ import { getLiveApiConfig } from './config/liveApiConfig.ts';
 import { createStockService, type StockService } from './services/stockService.ts';
 import type { DataSource } from './types/stock.ts';
 import { DEFAULT_PERFORMANCE_PERIOD, type PerformancePeriod } from './types/performance.ts';
+import { todayIsoDate } from './utils/date.ts';
 
 export interface AppProps {
   /** Inject a pre-built service (e.g. with fake providers) for testing. */
   service?: StockService;
   /** Override lookup behaviour (e.g. disable the minimum loading time in tests). */
   lookupOptions?: UseStockLookupOptions;
+  /** Today's date (`YYYY-MM-DD`): the upper bound of the reference date. Injectable for tests. */
+  today?: string;
 }
 
 function createDefaultStockService(): StockService {
@@ -29,7 +32,7 @@ function createDefaultStockService(): StockService {
   });
 }
 
-export default function App({ service, lookupOptions }: AppProps) {
+export default function App({ service, lookupOptions, today = todayIsoDate() }: AppProps) {
   const stockService = useMemo(() => service ?? createDefaultStockService(), [service]);
   const { data, source: loadedSource, loading, pendingSymbol, error, lookup } = useStockLookup(
     stockService,
@@ -41,6 +44,8 @@ export default function App({ service, lookupOptions }: AppProps) {
   const [source, setSource] = useState<DataSource>('api');
   /** Kept across lookups so a chosen window survives searching another symbol. */
   const [period, setPeriod] = useState<PerformancePeriod>(DEFAULT_PERFORMANCE_PERIOD);
+  /** Optional reference date the window is anchored on; `''` until one is picked (→ no query parameter). */
+  const [referenceDate, setReferenceDate] = useState('');
 
   /** A new symbol lookup invalidates any past-performance results shown for the previous one. */
   const startLookup = useCallback(
@@ -68,9 +73,18 @@ export default function App({ service, lookupOptions }: AppProps) {
     [resetPerf],
   );
 
+  /** Like the period: results belong to the reference date they were fetched for. */
+  const changeReferenceDate = useCallback(
+    (next: string) => {
+      setReferenceDate(next);
+      resetPerf();
+    },
+    [resetPerf],
+  );
+
   const fetchPerformance = useCallback(() => {
-    if (data && loadedSource) void fetchPerf(data.symbol, period, loadedSource);
-  }, [data, loadedSource, period, fetchPerf]);
+    if (data && loadedSource) void fetchPerf(data.symbol, period, loadedSource, referenceDate || undefined);
+  }, [data, loadedSource, period, referenceDate, fetchPerf]);
 
   return (
     <Container maxWidth={false} sx={{ py: 2, px: { xs: 2, md: 3 } }}>
@@ -98,6 +112,9 @@ export default function App({ service, lookupOptions }: AppProps) {
           <StockDetailCards details={data.details} />
           <PastPerformanceSection
             details={data.details}
+            referenceDate={referenceDate}
+            onReferenceDateChange={changeReferenceDate}
+            maxReferenceDate={today}
             period={period}
             onPeriodChange={changePeriod}
             onFetch={fetchPerformance}

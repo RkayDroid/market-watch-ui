@@ -1,0 +1,52 @@
+{
+    "ticker": "NFLX",
+    "symbol": "NFLX",
+    "period": "WEEK",
+    "interval": "1d",
+    "results": {
+        "2026-02-02": {
+            "window": {
+                "start": "2026-01-27",
+                "end": "2026-02-02"
+            },
+            "count": 5,
+            "data": [
+                {
+                    "datetime": "2026-01-27",
+                    "open": 85.28,
+                    "high": 85.6,
+                    "low": 83.88,
+                    "close": 85.58
+                },
+                {
+                    "datetime": "2026-01-28",
+                    "open": 85.63,
+                    "high": 86.47,
+                    "low": 84.3,
+                    "close": 84.64
+                },
+                {
+                    "datetime": "2026-01-29",
+                    "open": 84.31,
+                    "high": 84.38,
+                    "low": 82.35,
+                    "close": 83.16
+                },
+                {
+                    "datetime": "2026-01-30",
+                    "open": 83.1,
+                    "high": 84.06,
+                    "low": 82.78,
+                    "close": 83.49
+                },
+                {
+                    "datetime": "2026-02-02",
+                    "open": 83.53,
+                    "high": 85.27,
+                    "low": 82.72,
+                    "close": 82.76
+                }
+            ]
+        }
+    }
+}

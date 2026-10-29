@@ -17,27 +17,31 @@ period (day … 5 years), click Performance, and get the high/low tiles, price-t
 
 ## Data sources
 
-Every `StockProvider` answers three questions for a symbol — **details**, a **price series** for a
-period, and the **high/low** for a period — and both sources speak the same contract (below), parsed
-by the same code in `src/data/`.
+Every `StockProvider` answers two questions for a symbol — **details**, and the **price series**
+(OHLC candles) for a period, from which the period's **high/low** is derived — and both sources speak
+the same contract (below), parsed by the same code in `src/data/`.
 
 ### Local JSON (offline mode)
 
 The **Local JSON (offline)** option reads fixtures from [`public/data/`](public/data), named after the
-endpoint they stand in for (`SYMBOL` ∈ `AAPL`, `GOOG`, `META`; `PERIOD` ∈ the six below):
+endpoint they stand in for (`SYMBOL` ∈ `AAPL`, `BRK.A`, `GOOG`, `META`, `NFLX`, `RBLX`, `TSLA`;
+`PERIOD` ∈ the six below):
 
 | File | Stands in for |
 | --- | --- |
 | `detail-{SYMBOL}.json` | `GET /stock/{SYMBOL}` |
-| `historic-{SYMBOL}-{PERIOD}.json` | `GET /stock/{SYMBOL}/historic?period={PERIOD}` |
-| `highlow-{SYMBOL}-{PERIOD}.json` | `GET /stock/{SYMBOL}/highlow?period={PERIOD}` |
+| `historic-{SYMBOL}-{PERIOD}.json` | `GET /stock/{SYMBOL}/historic?period={PERIOD}` (no reference date) |
+| `historic-{SYMBOL}-{PERIOD}-1.json` | `…/historic?period={PERIOD}&referenceDate=2025-10-10` |
+| `historic-{SYMBOL}-{PERIOD}-2.json` | `…/historic?period={PERIOD}&referenceDate=2026-02-02` |
 
-They are copies of the live responses captured in [`json/`](json) (identified by content; the
-capture named `2026-10-25T003427.200.json` is `historic-AAPL-DAY` and `hihglow-META-FIVE_YEAR.json`
-is `highlow-META-FIVE_YEAR`). Vite serves them verbatim, so editing them needs no rebuild. To add a
-symbol, drop in all 13 of its files and add it to `OFFLINE_SYMBOLS` in
-`src/data/providers/LocalStockProvider.ts` (used for the suggestion chips on a miss);
-`src/data/localFixtures.test.ts` checks that the folder is complete and every file parses.
+Only those two reference dates were captured, so offline the `-2` file stands in for **any other**
+reference date (`localHistoricPath`); the chart title names the date the served window really ends
+on, so the substitution is visible. They are the live responses as captured, verbatim, and double as
+the reference captures of the current contract (the unit tests import them too). Vite serves them
+as-is, so editing them needs no rebuild. To add a symbol, drop in all 19 of its files and add it to
+`OFFLINE_SYMBOLS` in `src/data/providers/LocalStockProvider.ts` (used for the suggestion chips on a
+miss); `src/data/localFixtures.test.ts` checks that the folder is complete and every file parses for
+the symbol, period and reference date in its name.
 
 ### Live API
 
@@ -54,44 +58,58 @@ Contract:
 
 ```
 GET {VITE_LIVE_API_BASE_URL}/stock/{SYMBOL}
-GET {VITE_LIVE_API_BASE_URL}/stock/{SYMBOL}/historic?period={PERIOD}
-GET {VITE_LIVE_API_BASE_URL}/stock/{SYMBOL}/highlow?period={PERIOD}
+GET {VITE_LIVE_API_BASE_URL}/stock/{SYMBOL}/historic?period={PERIOD}[&referenceDate={YYYY-MM-DD}]
 Authorization: Bearer {VITE_LIVE_API_KEY}        (only when set)
 PERIOD = DAY | WEEK | MONTH | HALF_YEAR | YEAR | FIVE_YEAR
 
 /stock     200 → { "ticker": "AAPL", "symbol": "AAPL", "displayName": "Apple", "longName": "Apple Inc.",
                    "sector": "Technology", "exchange": "NMS", "market": "us_market",
-                   "currency": "USD", "language": "en-US", "fulldayPrice": 347.725 }
-/historic  200 → { "ticker": "AAPL", "period": "WEEK", "interval": "1d", "count": 5, "cached": false,
-                   "data": [ { "datetime": "2026-10-19", "price": 342.94 }, … ] }
-/highlow   200 → { "symbol": "AAPL", "period": "WEEK", "high": 351.73, "highOccured": "2026-10-23T09:30:00-04:00",
-                   "low": 338.7, "lowOccured": "2026-10-20T09:30:00-04:00" }
+                   "currency": "USD", "language": "en-US", "fulldayPrice": 343.83 }
+/historic  200 → { "ticker": "AAPL", "symbol": "AAPL", "period": "WEEK", "interval": "1d",
+                   "referenceDate": "2026-10-28", "window": { "start": "2026-10-22", "end": "2026-10-28" },
+                   "count": 5,
+                   "data": [ { "datetime": "2026-10-22", "open": 344.94, "high": 348.36, "low": 342.28, "close": 348.22 }, … ] }
+/historic  200 → { "ticker": "AAPL", "symbol": "AAPL", "period": "WEEK", "interval": "1d",
+ (with             "results": { "2025-10-10": { "window": { "start": "2025-10-06", "end": "2025-10-10" },
+  referenceDate)                                "count": 5, "data": [ … same candle shape … ] } } }
 404        → unknown symbol (shown as "not found in the live API")
 ```
 
 Notes on the shapes, as observed in the captures:
 
-- `/stock`: only `symbol` (falling back to `ticker`) is mandatory; every other field is optional and
-  gets a tile when present.
-- `/historic`: `datetime` is a full timestamp with offset for `DAY` (`interval: "1h"`) and a bare
+- `/stock`: only `ticker` (falling back to `symbol`) is mandatory; every other field is optional and
+  gets a tile when present. `ticker` is the identifier the API was asked for and is what the app uses
+  for follow-up requests; `symbol` is the provider's own spelling and can differ (`BRK.A` → `BRK-A`).
+- `/historic`: each sample is an OHLC candle. The chart and table plot `close`; the period's **high**
+  and **low** are the greatest `high` / smallest `low` across the candles, dated by the candle they
+  fall in (`computeHighLow` in `src/services/stockAnalytics.ts`) — the former `/highlow` endpoint is
+  gone. `datetime` is a full timestamp with offset for `DAY` (`interval: "1h"`) and a bare
   `YYYY-MM-DD` for other periods (`1d`, `2wk`, `1mo`). Bare dates are formatted as calendar dates
   (`formatPointLabel`) so they never shift by a day in western time zones. Samples are sorted on
-  load; `count`/`cached` are ignored. The parser also checks the response's `ticker`/`period` match
-  the request, so a mismatched response can't be shown as the wrong window.
-- `/highlow`: the API spells it `highOccured`/`lowOccured`; timestamps follow the same full/bare rule.
+  load; a candle with `low > high` is rejected. The parser also checks the response's
+  `ticker`/`period` match the request, so a mismatched response can't be shown as the wrong window.
+- `/historic` with `referenceDate` answers with a `results` map keyed by reference date instead of
+  top-level `data`. `parsePriceSeries` unwraps the entry for the requested date (rejecting a response
+  that lacks it, and refusing to guess between several); with no date requested a single-entry map is
+  taken as is, which is how the offline stand-in works. Either way the served `referenceDate` and
+  `window` end up on `PriceSeries`/`PastPerformance`; `count` is ignored.
 
 Transport and contract failures are surfaced as typed `LiveApiError`s (`unreachable`, `timeout`,
 `http`, `malformed`) with user-readable messages.
 
 ## Price chart
 
-`PriceChart` plots the period's samples (14 hourly points for a day, up to 61 monthly points for
+`PriceChart` plots the period's closing prices — the conventional series for a line chart; the full
+OHLC detail lives in the table — (7 hourly points for a day, up to 61 monthly points for
 five years) as a dependency-free, responsive SVG line chart (viewBox-scaled, so it needs no resize
 observers). All geometry — scales, tick selection,
 path strings — lives in pure functions under `src/charts/` and is tested with exact values;
 the component only renders what `computePriceChartLayout` returns. The line is coloured by
-overall direction (green up / red down / primary flat), hovering a column shows a tooltip,
-and every point carries an SVG `<title>` for assistive tech. Because it consumes plain
+overall direction (green up / red down / primary flat), hovering a column shows a compact tooltip —
+the candle's close as a centred bold headline, its high / low, and the timestamp in small print
+beneath; the box is sized to its widest row, so six-figure prices get more room — and every point
+carries an SVG `<title>` reading out the same figures for assistive tech (`describeCandle` in
+`utils/format.ts`). Because it consumes plain
 `TrendPoint[]`, it can be swapped for a charting library (e.g. `@mui/x-charts`, `recharts`)
 without touching the data or service layers.
 
@@ -108,17 +126,26 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   Sector, Exchange (code + name for known codes), Market (humanised) and Currency (code + name via
   `Intl.DisplayNames`). Tiles for absent fields are not rendered; `language` is parsed but deliberately not shown.
 - **Past Performance** — a single panel beneath the tiles, with no visible title (the region is named
-  "Past Performance" for assistive tech). Its dark toolbar holds the period radio group in white bold text
-  (Day / Week / Month / Six Months / Year / 5 Years, default Day; the choice persists across lookups) and a
-  white **Performance** button. Until Performance is clicked the panel is just this toolbar. It calls `/historic` and `/highlow` together for the loaded symbol, the
+  "Past Performance" for assistive tech). Its dark toolbar holds, left to right: the optional
+  **Reference date** (`ReferenceDatePicker`, styled like the period selector: label outside, compact
+  read-only box that stays empty until a date is picked; clicking it or its calendar button opens the
+  browser's native date picker, capped at today, and the pick is shown as `YYYY-MM-DD` regardless of
+  locale, with a clear button to go back to "no date"; a date after today is rejected with an inline
+  reason and disables Performance — sent as `&referenceDate=` when set, omitted when empty), the
+  period radio group in white bold text
+  (Day / Week / Month / Six Months / Year / 5 Years, default Day; both choices persist across lookups) and a
+  white **Performance** button. Until Performance is clicked the panel is just this toolbar. It calls `/historic` for the loaded symbol, the
   selected period and the source the symbol was loaded from, with its own loading indicator and error
-  banner inside the panel. Results render as: Latest Price (with change over the period) plus High
-  and Low tiles (with when they occurred) in a 15% column beside the price chart (fixed 280px height,
+  banner inside the panel. Results render as: Latest Price (last close, with change over the period) plus High
+  and Low tiles (derived from the candles, with when they occurred) in a 15% column beside the price chart (fixed 280px height,
   container-measured via `useElementWidth`), then a divider and the dense interval table — titled by
-  the loaded period and sampling interval (e.g. "Past Week (daily)"). The chart and table are rendered
+  the loaded period and sampling interval (e.g. "Past Week (daily)"; the chart title adds the date the
+  served window ends on, e.g. "Past Week to 2026-02-02") with one row per candle: Open,
+  High, Low, Close and a trend arrow (close vs. the previous close, i.e. the same series the chart
+  plots). The chart and table are rendered
   `embedded` (no border of their own) so the group reads as one unit. Results belong to the period they
-  were fetched for: changing the radio (or looking up another symbol) removes them, and nothing is shown
-  again until Performance is clicked again. Stacks vertically on small screens.
+  were fetched for: changing the radio or the reference date (or looking up another symbol) removes
+  them, and nothing is shown again until Performance is clicked again. Stacks vertically on small screens.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even
   the instant local source gives visible feedback. Failures render as a styled `ErrorBanner` with a
@@ -138,35 +165,34 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 | `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
 | `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the past-performance toolbar before fetching |
 | `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Performance: high/low tiles, chart and table for the period (offline fixtures) |
-| `live-META.png` | Same via the live API (`/stock`, `/historic`, `/highlow` served by a stub), Week |
+| `live-META.png` | Same via the live API (`/stock`, `/historic` served by a stub), Week |
 | `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |
 | `91-live-api-unreachable.png` | Live API selected with no endpoint configured |
 
 ## Architecture
 
 ```
-public/data/*.json                        offline fixtures (copies of the captures in json/), one per endpoint call
-json/                                     raw responses captured from the live API (reference only)
+public/data/*.json                        offline fixtures = captured live responses, one per endpoint call (incl. two reference dates)
 .env.example                              live API settings template
 src/
-  types/stock.ts                          domain types (StockDetails, PriceSeries, HighLow, PastPerformance, …)
+  types/stock.ts                          domain types (StockDetails, PriceSeries/PriceRecord candles, HighLow, PastPerformance, …)
   types/performance.ts                    Past Performance periods (DAY … FIVE_YEAR), labels, default
   data/payload.ts                         InvalidPayloadError + field validators shared by the parsers
   data/stockDetails.ts                    /stock payload -> StockDetails
-  data/priceSeries.ts                     /historic payload -> PriceSeries (sorted, request-checked)
-  data/highLow.ts                         /highlow payload -> HighLow
+  data/priceSeries.ts                     /historic payload -> PriceSeries of OHLC candles (sorted, request-checked)
   config/liveApiConfig.ts                 env-driven live API settings (URL, key, timeout)
   data/providers/StockProvider.ts         StockProvider interface, SymbolNotFoundError, LiveApiError
   data/providers/LocalStockProvider.ts    offline StockProvider over public/data (fixture paths, JSON loader)
   data/providers/LiveApiStockProvider.ts  HTTP-backed StockProvider (url builders, response parsing, error mapper)
-  services/stockAnalytics.ts              pure trend / change% / label formatting / PastPerformance assembly
-  services/stockService.ts                provider registry -> lookup(details) and performance(historic + highlow)
+  services/stockAnalytics.ts              pure trend / change% / high-low derivation / label formatting / PastPerformance assembly
+  services/stockService.ts                provider registry -> lookup(details) and performance(historic)
   hooks/useStockLookup.ts                 async state of the symbol lookup (+ the source it loaded from)
   hooks/usePerformanceLookup.ts           async state of the Performance fetch (data / loading / pendingPeriod / error, reset)
   errors/lookupError.ts                   maps thrown errors to a presentable { title, message, hint, suggestions }
   utils/symbol.ts                         normalizeSymbol
   utils/timing.ts                         delay, withMinimumDuration
   utils/format.ts                         currency / exchange / market / language / interval display formatters (pure)
+  utils/date.ts                           YYYY-MM-DD helpers: today, calendar validity, reference-date validation (pure)
   hooks/useElementWidth.ts                ResizeObserver-backed width measurement for the chart
   theme.ts                                compact MUI theme (applied with CssBaseline in main.tsx)
   layout.ts                               shared width proportions (30% input, 15% tiles)
@@ -175,7 +201,7 @@ src/
   charts/priceChartLayout.ts              TrendPoint[] -> scaled points, ticks, paths (pure)
   components/darkToolbar.ts               shared dark-bar style (page header + past-performance toolbar)
   components/                             LookupForm, LoadingIndicator, ErrorBanner, Tile, StockDetailCards,
-                                          PastPerformanceSection, PeriodSelector, StockSummaryCards,
+                                          PastPerformanceSection, ReferenceDatePicker, PeriodSelector, StockSummaryCards,
                                           PriceChart, HourlyPriceTable, TrendIndicator
   App.tsx                                 composition root (service is injectable for tests)
 ```

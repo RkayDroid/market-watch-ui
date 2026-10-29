@@ -2,12 +2,16 @@ import type { StockDetails } from '../types/stock.ts';
 import { InvalidPayloadError, isRecord, optionalNumber, optionalString } from './payload.ts';
 
 /* ---------------------------------------------------------------------------
- * Payload of `GET /stock/{symbol}` (see json/detail-*.json for live captures):
+ * Payload of `GET /stock/{symbol}` (see public/data/detail-*.json for live captures):
  *
  *   { "ticker": "AAPL", "symbol": "AAPL", "displayName": "Apple",
  *     "longName": "Apple Inc.", "sector": "Technology", "exchange": "NMS",
  *     "market": "us_market", "currency": "USD", "language": "en-US",
- *     "fulldayPrice": 347.725 }
+ *     "fulldayPrice": 343.83 }
+ *
+ * `ticker` is the identifier the API was asked for and accepts on the other
+ * endpoints; `symbol` is the provider's own spelling, which can differ
+ * (BRK.A → "BRK-A"). The model's `symbol` is therefore taken from `ticker` first.
  *
  * The same shape is served from public/data/detail-{SYMBOL}.json for the
  * offline source, so both providers share this parser.
@@ -29,15 +33,15 @@ const OPTIONAL_STRING_FIELDS: readonly OptionalStringKey[] = [
 
 /**
  * Validates a raw `/stock/{symbol}` payload and maps it to {@link StockDetails}.
- * `symbol` falls back to `ticker` (the payload carries both) and is upper-cased.
- * Throws {@link InvalidPayloadError} for anything off-contract.
+ * `symbol` is taken from `ticker`, falling back to `symbol` (the payload carries
+ * both), and is upper-cased. Throws {@link InvalidPayloadError} for anything off-contract.
  */
 export function parseStockDetails(payload: unknown): StockDetails {
   const subject = STOCK_DETAILS_SUBJECT;
   if (!isRecord(payload)) throw new InvalidPayloadError(subject, 'body is not an object');
 
   const symbol =
-    optionalString(subject, payload.symbol, 'symbol') ?? optionalString(subject, payload.ticker, 'ticker');
+    optionalString(subject, payload.ticker, 'ticker') ?? optionalString(subject, payload.symbol, 'symbol');
   if (!symbol) throw new InvalidPayloadError(subject, '"symbol" is missing');
 
   const details: StockDetails = { symbol: symbol.toUpperCase() };

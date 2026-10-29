@@ -1,8 +1,7 @@
 import axios, { isAxiosError, type AxiosRequestConfig } from 'axios';
 import type { LiveApiConfig } from '../../config/liveApiConfig.ts';
 import type { PerformancePeriod } from '../../types/performance.ts';
-import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
-import { parseHighLow } from '../highLow.ts';
+import type { PriceSeries, StockDetails } from '../../types/stock.ts';
 import { InvalidPayloadError } from '../payload.ts';
 import { parsePriceSeries } from '../priceSeries.ts';
 import { parseStockDetails } from '../stockDetails.ts';
@@ -12,8 +11,10 @@ import { LiveApiError, SymbolNotFoundError, type StockProvider } from './StockPr
  * API contract (payload shapes are documented next to each parser in src/data/)
  *
  *   GET {baseUrl}/stock/{SYMBOL}                          → stock details
- *   GET {baseUrl}/stock/{SYMBOL}/historic?period={PERIOD} → sampled prices over the period
- *   GET {baseUrl}/stock/{SYMBOL}/highlow?period={PERIOD}  → high/low over the period
+ *   GET {baseUrl}/stock/{SYMBOL}/historic?period={PERIOD}[&referenceDate={YYYY-MM-DD}]
+ *                                                         → OHLC candles over the period ending on the
+ *                                                           reference date (today when omitted); the
+ *                                                           period's high/low are derived from them
  *   Authorization: Bearer {apiKey}                        (only when configured)
  *
  *   PERIOD ∈ DAY | WEEK | MONTH | HALF_YEAR | YEAR | FIVE_YEAR
@@ -36,14 +37,16 @@ export function buildStockUrl(baseUrl: string, symbol: string): string {
   return stockBase(baseUrl, symbol);
 }
 
-/** `{base}/stock/{SYMBOL}/historic?period={PERIOD}`. */
-export function buildHistoricUrl(baseUrl: string, symbol: string, period: PerformancePeriod): string {
-  return `${stockBase(baseUrl, symbol)}/historic?${new URLSearchParams({ period })}`;
-}
-
-/** `{base}/stock/{SYMBOL}/highlow?period={PERIOD}`. */
-export function buildHighLowUrl(baseUrl: string, symbol: string, period: PerformancePeriod): string {
-  return `${stockBase(baseUrl, symbol)}/highlow?${new URLSearchParams({ period })}`;
+/** `{base}/stock/{SYMBOL}/historic?period={PERIOD}`, plus `&referenceDate={DATE}` when one is given. */
+export function buildHistoricUrl(
+  baseUrl: string,
+  symbol: string,
+  period: PerformancePeriod,
+  referenceDate?: string,
+): string {
+  const query = new URLSearchParams({ period });
+  if (referenceDate) query.set('referenceDate', referenceDate);
+  return `${stockBase(baseUrl, symbol)}/historic?${query}`;
 }
 
 /**
@@ -120,14 +123,9 @@ export function createLiveApiStockProvider(
     getDetails(symbol): Promise<StockDetails> {
       return request(buildStockUrl(config.baseUrl, symbol), symbol, parseStockDetails);
     },
-    getPriceSeries(symbol, period): Promise<PriceSeries> {
-      return request(buildHistoricUrl(config.baseUrl, symbol, period), symbol, (payload) =>
-        parsePriceSeries(payload, { symbol, period }),
-      );
-    },
-    getHighLow(symbol, period): Promise<HighLow> {
-      return request(buildHighLowUrl(config.baseUrl, symbol, period), symbol, (payload) =>
-        parseHighLow(payload, { symbol, period }),
+    getPriceSeries(symbol, period, referenceDate): Promise<PriceSeries> {
+      return request(buildHistoricUrl(config.baseUrl, symbol, period, referenceDate), symbol, (payload) =>
+        parsePriceSeries(payload, { symbol, period, referenceDate }),
       );
     },
   };

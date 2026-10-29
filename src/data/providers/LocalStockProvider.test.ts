@@ -1,14 +1,14 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import detailAapl from '../../../json/detail-AAPL.json';
-import highLowMonth from '../../../json/highlow-AAPL-MONTH.json';
-import historyMonth from '../../../json/history-AAPL-MONTH.json';
+import detailAapl from '../../../public/data/detail-AAPL.json';
+import historyMonth from '../../../public/data/historic-AAPL-MONTH.json';
+import historyMonthRef1 from '../../../public/data/historic-AAPL-MONTH-1.json';
+import historyMonthRef2 from '../../../public/data/historic-AAPL-MONTH-2.json';
 import {
   createDefaultLocalStockProvider,
   createHttpJsonLoader,
   createLocalStockProvider,
   localDetailsPath,
-  localHighLowPath,
   localHistoricPath,
   OFFLINE_SYMBOLS,
   type JsonLoader,
@@ -27,9 +27,10 @@ const json = { 'content-type': 'application/json; charset=utf-8' };
 
 const FILES: Record<string, unknown> = {
   'data/detail-AAPL.json': detailAapl,
-  'data/detail-TSLA.json': { symbol: 'TSLA', sector: 'Consumer Cyclical' },
+  'data/detail-MSFT.json': { symbol: 'MSFT', sector: 'Technology' },
   'data/historic-AAPL-MONTH.json': historyMonth,
-  'data/highlow-AAPL-MONTH.json': highLowMonth,
+  'data/historic-AAPL-MONTH-1.json': historyMonthRef1,
+  'data/historic-AAPL-MONTH-2.json': historyMonthRef2,
 };
 
 const loader: JsonLoader = async (path) => FILES[path] ?? null;
@@ -38,8 +39,17 @@ describe('fixture paths', () => {
   it('mirror the live endpoints', () => {
     expect(localDetailsPath('AAPL')).toBe('data/detail-AAPL.json');
     expect(localHistoricPath('AAPL', 'HALF_YEAR')).toBe('data/historic-AAPL-HALF_YEAR.json');
-    expect(localHighLowPath('BRK.B', 'DAY')).toBe('data/highlow-BRK.B-DAY.json');
+    expect(localHistoricPath('BRK.A', 'DAY')).toBe('data/historic-BRK.A-DAY.json');
     expect(localDetailsPath('A B')).toBe('data/detail-A%20B.json');
+  });
+
+  it('map the two captured reference dates to their files and every other date to the 2026-02-02 capture', () => {
+    expect(localHistoricPath('AAPL', 'WEEK', '2025-10-10')).toBe('data/historic-AAPL-WEEK-1.json');
+    expect(localHistoricPath('AAPL', 'WEEK', '2026-02-02')).toBe('data/historic-AAPL-WEEK-2.json');
+    expect(localHistoricPath('AAPL', 'WEEK', '2026-05-05')).toBe('data/historic-AAPL-WEEK-2.json');
+    expect(localHistoricPath('AAPL', 'WEEK', '1999-01-01')).toBe('data/historic-AAPL-WEEK-2.json');
+    expect(localHistoricPath('AAPL', 'WEEK', '')).toBe('data/historic-AAPL-WEEK.json');
+    expect(localHistoricPath('AAPL', 'WEEK', undefined)).toBe('data/historic-AAPL-WEEK.json');
   });
 });
 
@@ -47,21 +57,29 @@ describe('createLocalStockProvider', () => {
   it('serves details parsed from the JSON fixture', async () => {
     const provider = createLocalStockProvider(loader);
     expect(await provider.getDetails('AAPL')).toMatchObject({ symbol: 'AAPL', displayName: 'Apple' });
-    expect(await provider.getDetails('TSLA')).toEqual({ symbol: 'TSLA', sector: 'Consumer Cyclical' });
+    expect(await provider.getDetails('MSFT')).toEqual({ symbol: 'MSFT', sector: 'Technology' });
   });
 
-  it('serves the price series and high/low for a period from their fixtures', async () => {
+  it('serves the price series for a period from its fixture', async () => {
     const provider = createLocalStockProvider(loader);
     const series = await provider.getPriceSeries('AAPL', 'MONTH');
     expect(series).toMatchObject({ symbol: 'AAPL', period: 'MONTH', interval: '1d' });
-    expect(series.records).toHaveLength(20);
+    expect(series.records).toHaveLength(22);
+    expect(series.records[0]).toEqual({ date: '2026-09-29', open: 336.97, high: 337.09, low: 328.7, close: 329.4 });
+  });
 
-    expect(await provider.getHighLow('AAPL', 'MONTH')).toEqual({
-      symbol: 'AAPL',
-      period: 'MONTH',
-      high: { price: 351.73, occurredAt: '2026-10-23' },
-      low: { price: 325.81, occurredAt: '2026-10-01' },
-    });
+  it('serves the capture for a reference date, reporting the date the data is really for', async () => {
+    const provider = createLocalStockProvider(loader);
+    const exact = await provider.getPriceSeries('AAPL', 'MONTH', '2025-10-10');
+    expect(exact).toMatchObject({ symbol: 'AAPL', period: 'MONTH', referenceDate: '2025-10-10' });
+    expect(exact.window).toEqual({ start: '2025-09-11', end: '2025-10-10' });
+    expect(exact.records).toHaveLength(22);
+
+    const other = await provider.getPriceSeries('AAPL', 'MONTH', '2026-05-05');
+    expect(other.referenceDate).toBe('2026-02-02'); // the stand-in, not the requested date
+    expect(other.records).toHaveLength(20);
+
+    expect((await provider.getPriceSeries('AAPL', 'MONTH')).referenceDate).toBe('2026-10-28');
   });
 
   it('rejects symbols without a fixture, suggesting the shipped offline symbols', async () => {
@@ -69,14 +87,14 @@ describe('createLocalStockProvider', () => {
     expect(err).toBeInstanceOf(SymbolNotFoundError);
     expect((err as SymbolNotFoundError).availableSymbols).toEqual(OFFLINE_SYMBOLS);
     expect((err as Error).message).toBe(
-      'Symbol "NOPE" was not found in the offline data. Available symbols: AAPL, GOOG, META.',
+      'Symbol "NOPE" was not found in the offline data. Available symbols: AAPL, BRK.A, GOOG, META, NFLX, RBLX, TSLA.',
     );
   });
 
   it('rejects a period without a fixture the same way', async () => {
     const provider = createLocalStockProvider(loader);
     await expect(provider.getPriceSeries('AAPL', 'YEAR')).rejects.toBeInstanceOf(SymbolNotFoundError);
-    await expect(provider.getHighLow('TSLA', 'MONTH')).rejects.toBeInstanceOf(SymbolNotFoundError);
+    await expect(provider.getPriceSeries('MSFT', 'MONTH')).rejects.toBeInstanceOf(SymbolNotFoundError);
   });
 
   it('accepts a custom list of available symbols', async () => {
@@ -90,8 +108,8 @@ describe('createLocalStockProvider', () => {
     await expect(provider.getDetails('AAPL')).rejects.toThrow(
       'The offline file data/detail-AAPL.json is malformed: "symbol" is missing.',
     );
-    await expect(provider.getHighLow('AAPL', 'DAY')).rejects.toThrow(
-      'The offline file data/highlow-AAPL-DAY.json is malformed: "high" is missing.',
+    await expect(provider.getPriceSeries('AAPL', 'DAY')).rejects.toThrow(
+      'The offline file data/historic-AAPL-DAY.json is malformed: "data" is not an array.',
     );
   });
 
@@ -153,12 +171,12 @@ describe('createDefaultLocalStockProvider', () => {
     const provider = createDefaultLocalStockProvider('/base/');
 
     expect(await provider.getDetails('AAPL')).toMatchObject({ displayName: 'Apple' });
-    expect((await provider.getPriceSeries('AAPL', 'MONTH')).records).toHaveLength(20);
-    await expect(provider.getHighLow('AAPL', 'MONTH')).rejects.toBeInstanceOf(SymbolNotFoundError);
+    expect((await provider.getPriceSeries('AAPL', 'MONTH')).records).toHaveLength(22);
+    await expect(provider.getPriceSeries('AAPL', 'WEEK')).rejects.toBeInstanceOf(SymbolNotFoundError);
     expect(vi.mocked(axios.get).mock.calls.map((c) => c[0])).toEqual([
       '/base/data/detail-AAPL.json',
       '/base/data/historic-AAPL-MONTH.json',
-      '/base/data/highlow-AAPL-MONTH.json',
+      '/base/data/historic-AAPL-WEEK.json',
     ]);
   });
 });

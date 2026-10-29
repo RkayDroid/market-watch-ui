@@ -12,19 +12,38 @@ export function isDataSource(value: string): value is DataSource {
   return (DATA_SOURCES as readonly string[]).includes(value);
 }
 
-/** A single observed price for a symbol at a point in time. */
+/** One OHLC candle of a price series: the prices observed over a single sampling interval. */
 export interface PriceRecord {
-  /** ISO-8601 timestamp, or a bare `YYYY-MM-DD` date for daily and coarser samples. */
+  /**
+   * Start of the interval: an ISO-8601 timestamp for hourly samples, or a bare
+   * `YYYY-MM-DD` date for daily and coarser samples.
+   */
   date: string;
-  rate: number;
+  open: number;
+  /** Highest price traded during the interval. */
+  high: number;
+  /** Lowest price traded during the interval. */
+  low: number;
+  /** Last price of the interval — the "price" shown in the chart and table. */
+  close: number;
 }
 
-/** Chronological price samples for one look-back period, as returned by `GET /stock/{symbol}/historic`. */
+/** First and last calendar date (`YYYY-MM-DD`) of a look-back window. */
+export interface DateWindow {
+  start: string;
+  end: string;
+}
+
+/** Chronological price candles for one look-back period, as returned by `GET /stock/{symbol}/historic`. */
 export interface PriceSeries {
   symbol: string;
   period: PerformancePeriod;
   /** Sampling interval reported by the API, e.g. "1h", "1d", "2wk", "1mo". */
   interval: string;
+  /** Date (`YYYY-MM-DD`) the window is anchored on, as reported by the API (today when none was requested). */
+  referenceDate?: string;
+  /** Calendar span the candles cover, when the API reports it. */
+  window?: DateWindow;
   /** Sorted oldest → newest. Never empty. */
   records: PriceRecord[];
 }
@@ -32,14 +51,15 @@ export interface PriceSeries {
 /** A price together with the moment it was observed. */
 export interface PriceExtreme {
   price: number;
-  /** ISO-8601 timestamp or bare date, as given by the API. */
+  /** ISO-8601 timestamp or bare date of the candle the price was observed in. */
   occurredAt: string;
 }
 
-/** Highest and lowest price over a look-back period, as returned by `GET /stock/{symbol}/highlow`. */
+/**
+ * Highest and lowest price over a look-back period. Derived from the candles of a
+ * {@link PriceSeries} (`computeHighLow`); the API no longer serves it separately.
+ */
 export interface HighLow {
-  symbol: string;
-  period: PerformancePeriod;
   high: PriceExtreme;
   low: PriceExtreme;
 }
@@ -69,11 +89,16 @@ export interface StockDetails {
   fulldayPrice?: number;
 }
 
-/** One sampled point of a price series as shown in the chart and table. */
+/** One candle of a price series as shown in the chart and table. */
 export interface TrendPoint {
-  /** Formatted timestamp of the sample. */
+  /** Formatted timestamp of the candle. */
   label: string;
+  open: number;
+  high: number;
+  low: number;
+  /** Closing price — the value the chart plots and the trend is computed on. */
   price: number;
+  /** Direction of the close relative to the previous candle's close. */
   trend: Trend;
 }
 
@@ -82,6 +107,9 @@ export interface PastPerformance {
   symbol: string;
   period: PerformancePeriod;
   interval: string;
+  /** Date the window is anchored on, as served (see {@link PriceSeries.referenceDate}). */
+  referenceDate?: string;
+  window?: DateWindow;
   /** Most recent sample of the series. */
   latestPrice: number;
   /** Percentage change from the first to the last sample of the series. */

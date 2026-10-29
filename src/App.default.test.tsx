@@ -6,7 +6,6 @@ import App from './App.tsx';
 import detailGoog from '../public/data/detail-GOOG.json';
 import detailAapl from '../public/data/detail-AAPL.json';
 import historicAaplMonth from '../public/data/historic-AAPL-MONTH.json';
-import highlowAaplMonth from '../public/data/highlow-AAPL-MONTH.json';
 
 /** Only the transport is replaced; axios' error helpers stay real so 404 handling is exercised. */
 vi.mock('axios', async (importOriginal) => {
@@ -44,11 +43,11 @@ describe('App (default service wiring)', () => {
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
     await userEvent.click(screen.getByLabelText(/local json/i));
-    await userEvent.type(screen.getByLabelText(/stock symbol/i), 'nflx{enter}');
+    await userEvent.type(screen.getByLabelText(/stock symbol/i), 'msft{enter}');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Symbol not found');
-    expect(alert).toHaveTextContent('AAPLGOOGMETA');
+    expect(alert).toHaveTextContent('AAPLBRK.AGOOGMETANFLXRBLXTSLA');
   });
 
   it('calls the configured live API base URL for the API source', async () => {
@@ -61,12 +60,11 @@ describe('App (default service wiring)', () => {
     expect(vi.mocked(axios.get).mock.calls[0][0]).toBe('https://api.market-watch.example/v1/stock/AAPL');
   });
 
-  it('Fetch calls the live historic and highlow endpoints on the configured host when the Live API source is selected', async () => {
+  it('Fetch calls the live historic endpoint on the configured host when the Live API source is selected', async () => {
     const base = 'https://api.market-watch.example/v1';
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
       if (url === `${base}/stock/AAPL`) return { data: detailAapl };
       if (url === `${base}/stock/AAPL/historic?period=MONTH`) return { data: historicAaplMonth };
-      if (url === `${base}/stock/AAPL/highlow?period=MONTH`) return { data: highlowAaplMonth };
       throw new Error(`unexpected request: ${url}`);
     });
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
@@ -79,10 +77,10 @@ describe('App (default service wiring)', () => {
 
     expect(await screen.findByTestId('summary-tiles')).toBeInTheDocument();
     expect(screen.getByTestId('summary-high')).toHaveTextContent('$351.73');
-    expect(screen.getAllByRole('row')).toHaveLength(21); // header + 20 daily samples
-    expect(vi.mocked(axios.get).mock.calls.map((c) => c[0]).sort()).toEqual([
+    expect(screen.getByTestId('summary-low')).toHaveTextContent('$325.81');
+    expect(screen.getAllByRole('row')).toHaveLength(23); // header + 22 daily candles
+    expect(vi.mocked(axios.get).mock.calls.map((c) => c[0])).toEqual([
       `${base}/stock/AAPL`,
-      `${base}/stock/AAPL/highlow?period=MONTH`,
       `${base}/stock/AAPL/historic?period=MONTH`,
     ]);
     expect(vi.mocked(axios.get).mock.calls.some(([url]) => String(url).includes('/data/'))).toBe(false);

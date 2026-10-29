@@ -1,5 +1,5 @@
 import type { PerformancePeriod } from '../../types/performance.ts';
-import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
+import type { PriceSeries, StockDetails } from '../../types/stock.ts';
 
 /**
  * Abstraction over a source of stock data (live API, offline JSON fixtures, ...).
@@ -9,10 +9,12 @@ import type { HighLow, PriceSeries, StockDetails } from '../../types/stock.ts';
 export interface StockProvider {
   /** Reference data — `GET /stock/{symbol}`. */
   getDetails(symbol: string): Promise<StockDetails>;
-  /** Sampled prices over a look-back period — `GET /stock/{symbol}/historic?period=`. */
-  getPriceSeries(symbol: string, period: PerformancePeriod): Promise<PriceSeries>;
-  /** Highest and lowest price over a look-back period — `GET /stock/{symbol}/highlow?period=`. */
-  getHighLow(symbol: string, period: PerformancePeriod): Promise<HighLow>;
+  /**
+   * OHLC candles over a look-back period — `GET /stock/{symbol}/historic?period=`, anchored on
+   * `referenceDate` (`YYYY-MM-DD`, `&referenceDate=`) when given, on today otherwise.
+   * The period's high and low are derived from these; there is no separate endpoint.
+   */
+  getPriceSeries(symbol: string, period: PerformancePeriod, referenceDate?: string): Promise<PriceSeries>;
 }
 
 export interface SymbolNotFoundOptions {

@@ -1,6 +1,6 @@
 /**
  * Look-back window for the "Past Performance" section. Values mirror the period
- * identifiers used by the history API (see json/history-{SYMBOL}-{PERIOD}.json).
+ * identifiers used by the history API (see public/data/historic-{SYMBOL}-{PERIOD}.json).
  */
 export type PerformancePeriod = 'DAY' | 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR' | 'FIVE_YEAR';
 

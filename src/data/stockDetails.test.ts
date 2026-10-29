@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import detailGoog from '../../json/detail-GOOG.json';
+import detailBrkA from '../../public/data/detail-BRK.A.json';
+import detailGoog from '../../public/data/detail-GOOG.json';
 import { InvalidPayloadError } from './payload.ts';
 import { parseStockDetails } from './stockDetails.ts';
 
@@ -14,7 +15,7 @@ describe('parseStockDetails', () => {
       market: 'us_market',
       currency: 'USD',
       language: 'en-US',
-      fulldayPrice: 317.28,
+      fulldayPrice: 321.89,
     });
   });
 
@@ -23,9 +24,12 @@ describe('parseStockDetails', () => {
     expect(details).toEqual({ symbol: 'X' });
   });
 
-  it('falls back to ticker when symbol is absent, and upper-cases', () => {
+  it('takes the symbol from ticker (the identifier the API accepts), falling back to symbol, and upper-cases', () => {
     expect(parseStockDetails({ ticker: 'msft' }).symbol).toBe('MSFT');
-    expect(parseStockDetails({ symbol: ' nflx ', ticker: 'OTHER' }).symbol).toBe('NFLX');
+    expect(parseStockDetails({ symbol: ' nflx ' }).symbol).toBe('NFLX');
+    expect(parseStockDetails({ symbol: 'OTHER', ticker: ' nflx ' }).symbol).toBe('NFLX');
+    // The captured BRK.A payload spells its own symbol differently from the requested ticker.
+    expect(parseStockDetails(detailBrkA)).toMatchObject({ symbol: 'BRK.A', displayName: 'Berkshire Hathaway' });
   });
 
   it('treats null, blank and missing optional fields as absent', () => {

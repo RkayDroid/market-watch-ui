@@ -21,7 +21,11 @@ export interface ChartPoint {
   x: number;
   y: number;
   index: number;
+  /** Plotted value (the close). */
   price: number;
+  open: number;
+  high: number;
+  low: number;
   label: string;
   trend: Trend;
 }
@@ -118,6 +122,9 @@ export function computePriceChartLayout(
     y: yScale(h.price),
     index,
     price: h.price,
+    open: h.open,
+    high: h.high,
+    low: h.low,
     label: h.label,
     trend: h.trend,
   }));

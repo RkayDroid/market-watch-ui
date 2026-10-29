@@ -15,9 +15,10 @@ interface StockSummaryCardsProps {
 }
 
 /**
- * Compact, vertically stacked tiles for the selected period: the latest sampled price
- * with the change over the period, and the high / low from `/highlow` with when they
- * occurred. Rendered beside the chart; stretches to the height of its container.
+ * Compact, vertically stacked tiles for the selected period: the latest closing price
+ * with the change over the period, and the period's high / low (derived from the
+ * `/historic` candles) with when they occurred. Rendered beside the chart; stretches
+ * to the height of its container.
  */
 export default function StockSummaryCards({
   performance,

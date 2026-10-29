@@ -19,6 +19,23 @@ export function formatPrice(value: number, currency: string = DEFAULT_CURRENCY):
   }
 }
 
+/** The figures of a candle the chart reads out; `price` is the close, as in `TrendPoint`. */
+export interface CandleFigures {
+  label: string;
+  high: number;
+  low: number;
+  price: number;
+}
+
+/**
+ * One-line description of a candle for assistive tech / SVG `<title>`s, e.g.
+ * "Oct 21, 2026: close $282.50 (high $283.00, low $274.70)".
+ */
+export function describeCandle(candle: CandleFigures, currency?: string): string {
+  const f = (value: number) => formatPrice(value, currency);
+  return `${candle.label}: close ${f(candle.price)} (high ${f(candle.high)}, low ${f(candle.low)})`;
+}
+
 /** Friendly names for the exchange codes the API is known to return. */
 export const EXCHANGE_NAMES: Readonly<Record<string, string>> = {
   NMS: 'NASDAQ Global Select Market',

@@ -3,21 +3,31 @@ import DownloadIcon from '@mui/icons-material/Download';
 import type { LookupError } from '../errors/lookupError.ts';
 import { performancePeriodLabel, type PerformancePeriod } from '../types/performance.ts';
 import type { PastPerformance, StockDetails } from '../types/stock.ts';
+import { validateReferenceDate } from '../utils/date.ts';
 import { describeInterval } from '../utils/format.ts';
 import { LAYOUT } from '../layout.ts';
 import { DARK_TOOLBAR_SX } from './darkToolbar.ts';
 import ErrorBanner from './ErrorBanner.tsx';
 import LoadingIndicator from './LoadingIndicator.tsx';
 import PeriodSelector from './PeriodSelector.tsx';
+import ReferenceDatePicker from './ReferenceDatePicker.tsx';
 import PriceChart from './PriceChart.tsx';
 import HourlyPriceTable from './HourlyPriceTable.tsx';
 import StockSummaryCards from './StockSummaryCards.tsx';
 
 export interface PastPerformanceSectionProps {
   details: StockDetails;
+  /**
+   * Optional reference date (`YYYY-MM-DD`, or `''` for none) the look-back window is
+   * anchored on. `onFetch` is blocked while it is invalid.
+   */
+  referenceDate: string;
+  onReferenceDateChange: (value: string) => void;
+  /** Latest allowed reference date, normally today (`YYYY-MM-DD`). */
+  maxReferenceDate: string;
   period: PerformancePeriod;
   onPeriodChange: (period: PerformancePeriod) => void;
-  /** Requests historic + high/low data for `details.symbol` over `period`. */
+  /** Requests the historic candles (and with them the high/low) for `details.symbol` over `period`. */
   onFetch: () => void;
   /** Loaded performance, if any. May be for a different period than the one selected. */
   performance: PastPerformance | null;
@@ -37,6 +47,9 @@ export const PAST_PERFORMANCE_LABEL = 'Past Performance';
  */
 export default function PastPerformanceSection({
   details,
+  referenceDate,
+  onReferenceDateChange,
+  maxReferenceDate,
   period,
   onPeriodChange,
   onFetch,
@@ -45,8 +58,10 @@ export default function PastPerformanceSection({
   pendingPeriod,
   error,
 }: PastPerformanceSectionProps) {
+  const referenceDateError = validateReferenceDate(referenceDate, maxReferenceDate);
   const loadedLabel = performance ? `Past ${performancePeriodLabel(performance.period)}` : '';
-  const chartTitle = `Price Trend — ${loadedLabel}`;
+  // The date the served window really ends on — for the offline source this can differ from the pick.
+  const chartTitle = `Price Trend — ${loadedLabel}${performance?.referenceDate ? ` to ${performance.referenceDate}` : ''}`;
   const tableTitle = `Price Intervals — ${loadedLabel}${
     performance?.interval ? ` (${describeInterval(performance.interval)})` : ''
   }`;
@@ -59,12 +74,20 @@ export default function PastPerformanceSection({
       sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
       <Box data-testid="past-performance-toolbar" sx={DARK_TOOLBAR_SX}>
+        <ReferenceDatePicker
+          value={referenceDate}
+          onChange={onReferenceDateChange}
+          max={maxReferenceDate}
+          error={referenceDateError}
+          disabled={loading}
+          contrast
+        />
         <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} contrast />
         <Button
           variant="contained"
           size="small"
           startIcon={loading ? undefined : <DownloadIcon />}
-          disabled={loading}
+          disabled={loading || referenceDateError !== null}
           onClick={onFetch}
           aria-label="Performance"
           sx={{

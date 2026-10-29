@@ -53,42 +53,64 @@ export function formatPointLabel(date: string, options: LabelOptions = {}): stri
 
 export type LabelFormatter = (date: string) => string;
 
-/** Converts raw records into chart/table points with per-sample trend indicators. */
+/**
+ * Converts candles into chart/table points. The close is the plotted `price` and drives
+ * the trend (close vs. previous close); open/high/low are carried along for the table.
+ */
 export function buildTrendPoints(
   records: readonly PriceRecord[],
   formatLabel: LabelFormatter = formatPointLabel,
 ): TrendPoint[] {
   return records.map((record, index) => ({
     label: formatLabel(record.date),
-    price: record.rate,
-    trend: computeTrend(record.rate, records[index - 1]?.rate),
+    open: record.open,
+    high: record.high,
+    low: record.low,
+    price: record.close,
+    trend: computeTrend(record.close, records[index - 1]?.close),
   }));
 }
 
 /**
- * Combines the `/historic` series and the `/highlow` figures for one period into the
- * {@link PastPerformance} view model. Both are for the same symbol and period by
- * construction (the providers validate that against the request).
+ * The highest `high` and lowest `low` across a period's candles, each with the
+ * timestamp of the candle it was traded in. On a tie the earliest candle wins.
+ * Replaces the retired `/highlow` endpoint; `records` must not be empty.
  */
-export function summarizePerformance(
-  series: PriceSeries,
-  highLow: HighLow,
-  formatLabel?: LabelFormatter,
-): PastPerformance {
+export function computeHighLow(records: readonly PriceRecord[]): HighLow {
+  if (records.length === 0) throw new Error('Cannot compute high/low of an empty series.');
+  let highest = records[0];
+  let lowest = records[0];
+  for (const record of records) {
+    if (record.high > highest.high) highest = record;
+    if (record.low < lowest.low) lowest = record;
+  }
+  return {
+    high: { price: highest.high, occurredAt: highest.date },
+    low: { price: lowest.low, occurredAt: lowest.date },
+  };
+}
+
+/**
+ * Turns a `/historic` series for one period into the {@link PastPerformance} view
+ * model: closing prices as trend points, change over the period and the derived high/low.
+ */
+export function summarizePerformance(series: PriceSeries, formatLabel?: LabelFormatter): PastPerformance {
   if (series.records.length === 0) {
     throw new Error(`No price history available for ${series.symbol}.`);
   }
-  const first = series.records[0].rate;
-  const last = series.records[series.records.length - 1].rate;
+  const first = series.records[0].close;
+  const last = series.records[series.records.length - 1].close;
 
-  return {
+  const performance: PastPerformance = {
     symbol: series.symbol,
     period: series.period,
     interval: series.interval,
     latestPrice: last,
     changePercent: computeChangePercent(first, last),
     points: buildTrendPoints(series.records, formatLabel),
-    high: highLow.high,
-    low: highLow.low,
+    ...computeHighLow(series.records),
   };
+  if (series.referenceDate !== undefined) performance.referenceDate = series.referenceDate;
+  if (series.window !== undefined) performance.window = series.window;
+  return performance;
 }
