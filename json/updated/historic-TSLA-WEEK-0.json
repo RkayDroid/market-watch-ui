@@ -1,0 +1,49 @@
+{
+    "ticker": "TSLA",
+    "symbol": "TSLA",
+    "period": "WEEK",
+    "interval": "1d",
+    "referenceDate": "2026-10-28",
+    "window": {
+        "start": "2026-10-22",
+        "end": "2026-10-28"
+    },
+    "count": 5,
+    "data": [
+        {
+            "datetime": "2026-10-22",
+            "open": 374.29,
+            "high": 388.86,
+            "low": 373.71,
+            "close": 374.58
+        },
+        {
+            "datetime": "2026-10-23",
+            "open": 373.2,
+            "high": 377.32,
+            "low": 365.27,
+            "close": 372.22
+        },
+        {
+            "datetime": "2026-10-26",
+            "open": 383.83,
+            "high": 397.27,
+            "low": 383.73,
+            "close": 391.62
+        },
+        {
+            "datetime": "2026-10-27",
+            "open": 397.76,
+            "high": 408.45,
+            "low": 395.25,
+            "close": 407.46
+        },
+        {
+            "datetime": "2026-10-28",
+            "open": 410.21,
+            "high": 410.85,
+            "low": 397.18,
+            "close": 404.22
+        }
+    ]
+}

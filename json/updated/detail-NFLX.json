@@ -1,0 +1,12 @@
+{
+    "ticker": "NFLX",
+    "sector": "Communication Services",
+    "fulldayPrice": 61.99,
+    "currency": "USD",
+    "symbol": "NFLX",
+    "language": "en-US",
+    "longName": "Netflix, Inc.",
+    "exchange": "NMS",
+    "market": "us_market",
+    "displayName": "Netflix"
+}

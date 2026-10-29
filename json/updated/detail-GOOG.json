@@ -1,0 +1,12 @@
+{
+    "ticker": "GOOG",
+    "sector": "Communication Services",
+    "fulldayPrice": 321.89,
+    "currency": "USD",
+    "symbol": "GOOG",
+    "language": "en-US",
+    "longName": "Alphabet Inc.",
+    "exchange": "NMS",
+    "market": "us_market",
+    "displayName": "Alphabet"
+}

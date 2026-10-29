@@ -1,0 +1,12 @@
+{
+    "ticker": "AAPL",
+    "sector": "Technology",
+    "fulldayPrice": 343.83,
+    "currency": "USD",
+    "symbol": "AAPL",
+    "language": "en-US",
+    "longName": "Apple Inc.",
+    "exchange": "NMS",
+    "market": "us_market",
+    "displayName": "Apple"
+}

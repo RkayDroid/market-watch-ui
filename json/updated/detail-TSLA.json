@@ -1,0 +1,12 @@
+{
+    "ticker": "TSLA",
+    "sector": "Consumer Cyclical",
+    "fulldayPrice": 404.22,
+    "currency": "USD",
+    "symbol": "TSLA",
+    "language": "en-US",
+    "longName": "Tesla, Inc.",
+    "exchange": "NMS",
+    "market": "us_market",
+    "displayName": "Tesla"
+}
