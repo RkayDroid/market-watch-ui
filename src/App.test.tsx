@@ -25,7 +25,8 @@ const fakeHttp: HttpClient = {
     liveRequests.push(url);
     const m = /\/stock\/AAPL(?:\/historic\?period=([A-Z_]+)(?:&referenceDate=(\d{4}-\d{2}-\d{2}))?)?$/.exec(url);
     const variant = m?.[2] ? { '2025-10-10': '-1', '2026-02-02': '-2' }[m[2]] : '';
-    const data = m && variant !== undefined ? fixture(m[1] ? `historic-AAPL-${m[1]}${variant}.json` : 'detail-AAPL.json') : null;
+    const data =
+      m && variant !== undefined ? fixture(m[1] ? `historic-AAPL-${m[1]}${variant}.json` : 'detail-AAPL.json') : null;
     if (data) return { data };
     throw new AxiosError('not found', undefined, undefined, undefined, { status: 404 } as AxiosResponse);
   },
@@ -51,10 +52,16 @@ function buildService(local: StockProvider = createLocalStockProvider(loadLocalJ
   );
 }
 
+/** Flips the app-wide "Offline mode" switch in the header to the wanted source (no-op if already there). */
+async function selectSource(source: 'api' | 'local') {
+  const toggle = screen.getByRole('switch', { name: /offline mode/i });
+  if ((toggle as HTMLInputElement).checked !== (source === 'local')) await userEvent.click(toggle);
+}
+
 async function lookup(symbol: string, source: 'api' | 'local') {
   await userEvent.clear(screen.getByLabelText(/stock symbol/i));
   await userEvent.type(screen.getByLabelText(/stock symbol/i), symbol);
-  await userEvent.click(screen.getByLabelText(source === 'local' ? /local json/i : /live api/i));
+  await selectSource(source);
   await userEvent.click(screen.getByRole('button', { name: /find/i }));
 }
 
@@ -184,7 +191,11 @@ describe('App', () => {
     const rows = screen.getAllByRole('row');
     expect(rows).toHaveLength(6); // header + 5 days
     expect(rows[1]).toHaveTextContent('2026-10-22'); // formatLabel is identity in tests
-    expect(within(rows[1]).getAllByRole('cell').map((td) => td.textContent)).toEqual([
+    expect(
+      within(rows[1])
+        .getAllByRole('cell')
+        .map((td) => td.textContent),
+    ).toEqual([
       '2026-10-22',
       '$344.94', // open
       '$348.36', // high
@@ -261,17 +272,30 @@ describe('App', () => {
     expect(screen.queryByTestId('price-chart-panel')).not.toBeInTheDocument();
   });
 
-  it('fetches from the source the symbol was loaded with, even if the radio changed since', async () => {
+  it('fetches historic data from the source the Offline mode switch says now, not the one the symbol was loaded with', async () => {
     liveRequests.length = 0;
     render(<App service={buildService()} lookupOptions={{ minLoadingMs: 0 }} />);
-    await lookup('AAPL', 'local');
+    await lookup('AAPL', 'api');
     await screen.findByTestId('summary-symbol');
+    expect(liveRequests).toEqual(['https://api.test/v1/stock/AAPL']);
 
-    await userEvent.click(screen.getByLabelText(/live api/i)); // change the radio without looking up
+    await selectSource('local'); // switch to offline without looking up again
+    await userEvent.click(periodRadio('Week'));
     await userEvent.click(fetchButton());
     await screen.findByTestId('summary-tiles');
 
-    expect(liveRequests).toEqual([]);
+    // Served by the offline fixture: no /historic request reached the live API.
+    expect(liveRequests).toEqual(['https://api.test/v1/stock/AAPL']);
+    expect(screen.getByTestId('summary-high')).toHaveTextContent('$351.73');
+
+    await selectSource('api');
+    expect(screen.queryByTestId('summary-tiles')).not.toBeInTheDocument(); // results belong to their source
+    await userEvent.click(fetchButton());
+    await screen.findByTestId('summary-tiles');
+    expect(liveRequests).toEqual([
+      'https://api.test/v1/stock/AAPL',
+      'https://api.test/v1/stock/AAPL/historic?period=WEEK',
+    ]);
   });
 
   it('starts with no reference date, shows a picked one as YYYY-MM-DD, and keeps it across lookups', async () => {
@@ -392,7 +416,14 @@ describe('App', () => {
     await screen.findByTestId('summary-symbol');
 
     const radios = within(screen.getByTestId('period-selector')).getAllByRole('radio');
-    expect(radios.map((r) => r.getAttribute('value'))).toEqual(['DAY', 'WEEK', 'MONTH', 'HALF_YEAR', 'YEAR', 'FIVE_YEAR']);
+    expect(radios.map((r) => r.getAttribute('value'))).toEqual([
+      'DAY',
+      'WEEK',
+      'MONTH',
+      'HALF_YEAR',
+      'YEAR',
+      'FIVE_YEAR',
+    ]);
     expect(periodRadio('Day')).toBeChecked();
     expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
   });
@@ -418,15 +449,11 @@ describe('App', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Symbol not found');
     expect(alert).toHaveTextContent('"MSFT" is not available from this data source.');
-    expect(within(alert).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'AAPL',
-      'BRK.A',
-      'GOOG',
-      'META',
-      'NFLX',
-      'RBLX',
-      'TSLA',
-    ]);
+    expect(
+      within(alert)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['AAPL', 'BRK.A', 'GOOG', 'META', 'NFLX', 'RBLX', 'TSLA']);
     expect(screen.queryByTestId('summary-symbol')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /past performance/i })).not.toBeInTheDocument();
   });

@@ -1,5 +1,7 @@
 import { LiveApiError, SymbolNotFoundError } from '../data/providers/StockProvider.ts';
+import { WatchlistNotFoundError } from '../data/providers/WatchlistProvider.ts';
 import { InvalidSymbolError } from '../services/stockService.ts';
+import { InvalidWatchlistError } from '../services/watchlistService.ts';
 
 /** A user-presentable description of why a lookup failed. */
 export interface LookupError {
@@ -48,6 +50,18 @@ export function toLookupError(err: unknown): LookupError {
 
   if (err instanceof InvalidSymbolError) {
     return { title: 'Symbol required', message: err.message };
+  }
+
+  if (err instanceof WatchlistNotFoundError) {
+    return {
+      title: 'Watchlist not found',
+      message: err.message,
+      hint: 'It may have been deleted elsewhere. Reload the list to see what is still there.',
+    };
+  }
+
+  if (err instanceof InvalidWatchlistError) {
+    return { title: 'Watchlist not saved', message: err.message };
   }
 
   if (err instanceof Error && err.message) {

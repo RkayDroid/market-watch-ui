@@ -3,6 +3,12 @@
 A small React + TypeScript + Vite app that looks up a stock symbol and shows its reference
 data (company, sector, exchange, market, currency, …) plus a "Past Performance" section: pick a
 period (day … 5 years), click Performance, and get the high/low tiles, price-trend chart and interval table.
+That is the **Analysis** view, where the app opens. A header menu switches to the **Watchlist** view,
+which shows nothing but the user's watchlists; clicking a symbol there jumps back to Analysis and
+looks it up, and a chart button on each list opens a **Compare** view with the latest price / high /
+low and a miniature chart for every symbol side by side. An **Offline mode** switch in the same header picks the data source for everything:
+off = the live stock and watchlist APIs, on = bundled JSON fixtures for stocks and this browser's
+storage for watchlists.
 
 ## Scripts
 
@@ -17,13 +23,21 @@ period (day … 5 years), click Performance, and get the high/low tiles, price-t
 
 ## Data sources
 
+The **Offline mode** switch in the header (`SourceToggle`) selects the source app-wide; there is no
+per-form choice. Off (the default) means the live APIs, on means the offline stand-ins. The switch is
+authoritative at the moment a request is made: historic data — whether fetched with *Performance* on
+the Analysis view or *Compare* on a watchlist — always comes from the source the switch says **now**,
+not from the source a symbol happened to be looked up with earlier. Flipping it hides any loaded
+past-performance or comparison results (they belong to the source they came from) and, on the
+Watchlist view, reloads the lists from the other source.
+
 Every `StockProvider` answers two questions for a symbol — **details**, and the **price series**
 (OHLC candles) for a period, from which the period's **high/low** is derived — and both sources speak
 the same contract (below), parsed by the same code in `src/data/`.
 
 ### Local JSON (offline mode)
 
-The **Local JSON (offline)** option reads fixtures from [`public/data/`](public/data), named after the
+In offline mode, stock data comes from fixtures under [`public/data/`](public/data), named after the
 endpoint they stand in for (`SYMBOL` ∈ `AAPL`, `BRK.A`, `GOOG`, `META`, `NFLX`, `RBLX`, `TSLA`;
 `PERIOD` ∈ the six below):
 
@@ -45,7 +59,7 @@ the symbol, period and reference date in its name.
 
 ### Live API
 
-The **Live API** option calls `GET /stock/{symbol}` via `LiveApiStockProvider`. Until a base URL is
+Online, stock data comes from `GET /stock/{symbol}` via `LiveApiStockProvider`. Until a base URL is
 configured it points at a placeholder host and lookups report "Could not reach the live API …".
 To plug in the real API:
 
@@ -97,6 +111,48 @@ Notes on the shapes, as observed in the captures:
 Transport and contract failures are surfaced as typed `LiveApiError`s (`unreachable`, `timeout`,
 `http`, `malformed`) with user-readable messages.
 
+### Watchlist API
+
+Watchlists go through a `WatchlistProvider` (`src/data/providers/WatchlistProvider.ts`) with the same
+two implementations: `LiveApiWatchlistProvider` over the watchlist API, and `LocalWatchlistProvider`
+over this browser's storage (`localStorage` key `market-watch.watchlists.v1`, memory when storage is
+unavailable). Both share the same base URL / key / timeout settings as the stock API, plus
+`VITE_USER_ID` (default `anonymous`) for the `userId` the API wants.
+
+Contract, as implemented in `src/data/watchlistPayload.ts` (request builders + parsers, covered by tests):
+
+```
+GET    {base}/user/{userId}/watchlists
+                                 → { "userId": "alice", "count": 2,
+                                     "watchlists": [ { "watchListId": "k3Zp9QaB", "watchListName": "Tech" }, … ] }
+POST   {base}/watchlist          { "userId": "alice", "watchListName": "Tech", "symbols": ["AAPL", "MSFT"] }
+                                 → { "userId": "alice", "watchListName": "Tech", "watchListId": "k3Zp9QaB" }
+PUT    {base}/watchlist          { "watchListId": "k3Zp9QaB", "watchListName": "Tech", "symbols": ["MSFT", "AAPL"] }  → 200
+GET    {base}/watchlist/{id}     → { "watchListId": "k3Zp9QaB", "userId": "u1", "watchListName": "Tech", "count": 2,
+                                     "symbols": { "1": { …same shape as /stock… }, "2": { "ticker": "NOPE", "error": "Ticker NOPE not found." } } }
+DELETE {base}/watchlist/{id}     → 200
+404 → unknown watchlist id
+```
+
+Notes on the mapping:
+
+- The client speaks `Watchlist { id, name, symbols[] }`; only the builders/parsers know `watchListId` /
+  `watchListName`. Symbols are sent already normalised (upper-case, de-duplicated, validated — see
+  *Watchlists* below), so the server's casing cannot differ from what is shown.
+- `POST` does not echo the symbols; the created list shows the symbols it was sent, under the server's id.
+- `GET` resolves every symbol to `/stock`-shaped details (parsed with the same `parseStockDetails`) or an
+  `error`. The parser sorts the `symbols` map by its 1-based keys and checks `count` when present. The UI
+  currently shows only the tickers (`toWatchlist`); the resolved details are available for a richer card.
+- `PUT` is a full replacement of name + symbols — exactly what the edit dialog produces.
+- The listing (`GET /user/{userId}/watchlists`, `parseWatchlistListing`) carries ids and names only, so
+  `list()` reads each list back with `GET /watchlist/{id}` (in parallel) for its symbols; a list that
+  404s between the two calls is skipped. `listSummaries()` exposes the listing itself. Offline, the
+  local provider answers both from this browser's storage. Lists are requested only once the Watchlist
+  view is opened (and again when the source changes), not on page load.
+- Failures map like the stock API's: 404 → "Watchlist not found", other statuses / timeouts /
+  unreachable → the corresponding `LiveApiError`, off-contract bodies → "Unexpected API response".
+  The dialogs keep their content and show the message so the user can retry.
+
 ## Price chart
 
 `PriceChart` plots the period's closing prices — the conventional series for a line chart; the full
@@ -112,6 +168,67 @@ carries an SVG `<title>` reading out the same figures for assistive tech (`descr
 `utils/format.ts`). Because it consumes plain
 `TrendPoint[]`, it can be swapped for a charting library (e.g. `@mui/x-charts`, `recharts`)
 without touching the data or service layers.
+
+## Views
+
+The header carries a two-item menu (`AppNav`, `src/types/view.ts`) — the current item is outlined and
+marked `aria-current="page"` — and, beside it, the app-wide **Offline mode** switch (`SourceToggle`).
+
+- **Analysis** (default) — the lookup form, detail tiles and past-performance panel described above.
+  Lookup state lives above the view switch, so results survive a detour to the Watchlist view and back.
+- **Watchlist** — only the watchlists section (no lookup form, no results), with a caption saying
+  where the lists live ("Saved on the server." / "Saved in this browser (offline mode)."), a loading
+  indicator while they load and an error banner if loading or deleting fails. Clicking a symbol chip
+  switches to Analysis, fills the symbol box and runs the lookup with the app-wide source, exactly as
+  if Find had been clicked.
+- **Compare** — reached from the chart button on a watchlist card (the menu keeps *Watchlist*
+  selected; a "Watchlists" button goes back). Shows the list's name and symbols, then the same dark
+  toolbar as Past Performance — reference date, period radios — with a **Compare** button instead of
+  Performance (`PerformanceToolbar`, shared by both). Compare fetches `/stock` and `/historic` for
+  every symbol at once (`useWatchlistComparison`; one symbol failing only affects its own card) and
+  lays the results out two per row (one per row on small screens): each card has the symbol and
+  company, the Latest Price / High / Low tiles in a row, and a miniature price chart (190 px). There
+  is deliberately no interval table here. As in Analysis, changing the period or date hides the results
+  until Compare is clicked again. If the compared list disappears (deleted, or the source is switched
+  and the other source does not have it) the view falls back to the watchlists.
+
+The brand purple of the favicon (`#863bff`) is the theme's `secondary` colour and is used for the
+watchlist accents only; the working screens keep the neutral primary and dark bars.
+
+### Watchlists
+
+A watchlist is `{ id, name, symbols[] }` (`src/types/watchlist.ts`): a user-chosen name,
+unique among their lists (case-insensitively, ≤ 40 chars), and 1–20 normalised symbols in the order
+entered, without duplicates. Symbols must match `SYMBOL_PATTERN` (`^[A-Z0-9][A-Z0-9.-]{0,9}$`, so
+`BRK.A` and `BRK-A` are fine); nothing is checked against a provider at creation time — each symbol
+is looked up on its own when clicked, with the selected source.
+
+- **Create** — the "Create watchlist" tile/button opens a dialog: a name and a free-text symbol box
+  (commas, spaces, semicolons or new lines all separate). The parsed symbols are previewed as chips
+  (× removes one), and the offline symbols (`QUICK_SYMBOLS`, `src/config/quickLinks.ts`) are offered
+  as "quick add" toggles. An impossible token (`bad!`)
+  is flagged as soon as it is typed; "required" messages wait until the field is left. Save is
+  disabled until the draft is valid, reads "Saving…" while the provider works, and a storage failure
+  is shown inside the dialog (the draft is kept for a retry). Rules live in
+  `src/services/watchlistService.ts` (pure); the provider only receives what passed them.
+- **Use** — each saved list is a card with a clickable chip per symbol (→ Analysis lookup) and
+  compare / edit / delete buttons. Newest list first.
+- **Edit** — the pencil opens a dialog to **rename** the list and **add**, **remove** or
+  **reorder** its symbols. Rows have move up / move down / × buttons (keyboard-operable, no drag
+  library); an "Add symbols" box takes a comma/space-separated list and applies it with Enter or
+  Add (an impossible token blocks the entry and is named, nothing is silently dropped), and the
+  offline symbols not yet in the list are offered as quick-add chips. The same name rules apply,
+  except that the list may keep its own name; the symbol rules are those of creation (1–20, unique,
+  valid), so the last symbol cannot be removed — delete the list instead. Save stays disabled until
+  something actually differs from what is saved. `updateWatchlist` replaces the list in place (id,
+  `createdAt` and position unchanged).
+- **Persistence** — through the `WatchlistProvider` for the current source (see *Watchlist API*
+  above). Offline: `localStorage` under `market-watch.watchlists.v1` (`src/data/watchlistStore.ts`);
+  what comes back is treated as untrusted and parsed with the same validators as an API payload — a
+  malformed entry or duplicate id is skipped, a corrupt value means "no watchlists" — and an in-memory
+  store stands in when storage is unavailable (private mode, sandboxed frame). No cross-tab sync.
+  `useWatchlists(provider)` owns the async lifecycle (load on provider change, write-through on every
+  change; only the latest load may update state). `App` accepts injected `watchlistProviders` for tests.
 
 ## Layout
 
@@ -146,6 +263,8 @@ The UI is a single-screen dashboard (`Container maxWidth={false}`):
   `embedded` (no border of their own) so the group reads as one unit. Results belong to the period they
   were fetched for: changing the radio or the reference date (or looking up another symbol) removes
   them, and nothing is shown again until Performance is clicked again. Stacks vertically on small screens.
+- **Source changes** — flipping Offline mode keeps the detail tiles (reference data) but removes loaded
+  past-performance results; the next Performance click fetches from the newly selected source.
 - **Lookup lifecycle** — clicking Find clears any previous results immediately and shows a
   "Fetching results for X…" indicator for at least one second (`withMinimumDuration`), so even
   the instant local source gives visible feedback. Failures render as a styled `ErrorBanner` with a
@@ -161,33 +280,53 @@ Captured with headless Chromium at 1440px — see `docs/screenshots/`:
 
 | File | What it shows |
 | --- | --- |
-| `00-initial.png` | Empty state; "Find" disabled until a symbol is entered |
+| `00-initial.png` | Empty state before the header menu was added; "Find" disabled until a symbol is entered |
+| `10-analysis.png` | Analysis view as the app opens, with the Analysis / Watchlist menu and the Offline mode switch in the header |
+| `16-watchlist-online.png` | Watchlist view online with no lists yet |
+| `17-compare-before.png` | Compare view before clicking Compare: name, symbols, toolbar, hint |
+| `18-compare.png` | Compare view: four symbols, two per row, tiles + miniature chart each |
+| `11-watchlist-empty.png` | Watchlist view offline with no lists yet |
+| `12-create-watchlist.png` | Create-watchlist dialog with the symbol preview and quick-add toggles |
+| `13-watchlist.png` | A saved watchlist as a card of clickable symbol chips |
+| `14-lookup-from-watchlist.png` | After clicking a watchlist chip: back on Analysis with the symbol looked up |
+| `15-edit-watchlist.png` | Edit dialog: rename, reorder, remove, add (typed or quick-add) |
 | `01-loading.png` | "Fetching results…" indicator (shown for at least 1 s, even for the local source) |
 | `AAPL.png`, `GOOG.png`, `META.png` | Detail tiles and the past-performance toolbar before fetching |
 | `AAPL-WEEK.png`, `GOOG-DAY.png`, `META-FIVE_YEAR.png` | After Performance: high/low tiles, chart and table for the period (offline fixtures) |
 | `live-META.png` | Same via the live API (`/stock`, `/historic` served by a stub), Week |
 | `90-not-found.png` | Unknown symbol in the offline data, with clickable suggestions |
-| `91-live-api-unreachable.png` | Live API selected with no endpoint configured |
+| `91-live-api-unreachable.png` | Online with no endpoint configured |
 
 ## Architecture
 
 ```
 public/data/*.json                        offline fixtures = captured live responses, one per endpoint call (incl. two reference dates)
-.env.example                              live API settings template
+.env.example                              live API settings template (base URL, key, timeout, user id)
 src/
   types/stock.ts                          domain types (StockDetails, PriceSeries/PriceRecord candles, HighLow, PastPerformance, …)
   types/performance.ts                    Past Performance periods (DAY … FIVE_YEAR), labels, default
+  types/watchlist.ts                      Watchlist / WatchlistDraft, limits, SYMBOL_PATTERN
+  types/view.ts                           AppView (menu items), ViewState (incl. compare sub-view), default
   data/payload.ts                         InvalidPayloadError + field validators shared by the parsers
   data/stockDetails.ts                    /stock payload -> StockDetails
   data/priceSeries.ts                     /historic payload -> PriceSeries of OHLC candles (sorted, request-checked)
-  config/liveApiConfig.ts                 env-driven live API settings (URL, key, timeout)
+  config/liveApiConfig.ts                 env-driven live API settings (URL, key, timeout, user id)
+  config/quickLinks.ts                    QUICK_SYMBOLS ("quick add" suggestions in the create-watchlist dialog)
+  data/watchlistStore.ts                  offline persistence: parser + WatchlistStore (localStorage / memory)
+  data/watchlistPayload.ts                watchlist API request builders + response parsers (POST / PUT / GET / listing)
+  data/providers/WatchlistProvider.ts     WatchlistProvider interface (list/get/create/update/remove), WatchlistNotFoundError
+  data/providers/LocalWatchlistProvider.ts   offline provider over a WatchlistStore
+  data/providers/LiveApiWatchlistProvider.ts HTTP provider: URLs (incl. /user/{id}/watchlists), error mapper
   data/providers/StockProvider.ts         StockProvider interface, SymbolNotFoundError, LiveApiError
   data/providers/LocalStockProvider.ts    offline StockProvider over public/data (fixture paths, JSON loader)
   data/providers/LiveApiStockProvider.ts  HTTP-backed StockProvider (url builders, response parsing, error mapper)
   services/stockAnalytics.ts              pure trend / change% / high-low derivation / label formatting / PastPerformance assembly
   services/stockService.ts                provider registry -> lookup(details) and performance(historic)
+  services/watchlistService.ts            pure watchlist rules: symbol-list parsing, draft/edit validation, collection helpers
   hooks/useStockLookup.ts                 async state of the symbol lookup (+ the source it loaded from)
   hooks/usePerformanceLookup.ts           async state of the Performance fetch (data / loading / pendingPeriod / error, reset)
+  hooks/useWatchlists.ts                  async watchlist collection for the current provider (lazy load / create / update / remove)
+  hooks/useWatchlistComparison.ts         async state of a comparison: /stock + /historic per symbol, in parallel
   errors/lookupError.ts                   maps thrown errors to a presentable { title, message, hint, suggestions }
   utils/symbol.ts                         normalizeSymbol
   utils/timing.ts                         delay, withMinimumDuration
@@ -201,9 +340,16 @@ src/
   charts/priceChartLayout.ts              TrendPoint[] -> scaled points, ticks, paths (pure)
   components/darkToolbar.ts               shared dark-bar style (page header + past-performance toolbar)
   components/                             LookupForm, LoadingIndicator, ErrorBanner, Tile, StockDetailCards,
-                                          PastPerformanceSection, ReferenceDatePicker, PeriodSelector, StockSummaryCards,
+                                          PastPerformanceSection, ReferenceDatePicker, PeriodSelector, StockSummaryCards (column or row),
                                           PriceChart, HourlyPriceTable, TrendIndicator
-  App.tsx                                 composition root (service is injectable for tests)
+  components/AppNav.tsx                   header menu (Analysis / Watchlist); SourceToggle.tsx — the Offline mode switch
+  components/PerformanceToolbar.tsx       dark bar: reference date + period + action button (Performance / Compare)
+  components/ComparePage.tsx              the Compare view; CompareCard.tsx — one symbol's tiles + miniature chart
+  components/WatchlistPage.tsx            the Watchlist view = WatchlistsSection only
+  components/WatchlistsSection.tsx        watchlist grid / first-watchlist tile; WatchlistCard.tsx; CreateWatchlistDialog.tsx;
+                                          EditWatchlistDialog.tsx (rename + add/remove/reorder symbols)
+  App.tsx                                 composition root: source + view switches, lookup state (service/providers injectable)
+  test/fakeWatchlistApi.ts                in-memory watchlist API speaking the contract, for provider and App tests
 ```
 
 Every layer is a plain function or interface with its dependencies passed in, so each

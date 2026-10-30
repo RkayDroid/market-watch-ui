@@ -12,6 +12,8 @@ interface StockSummaryCardsProps {
   currency?: string;
   /** Formats the "occurred at" timestamps; injectable for deterministic tests. */
   formatOccurredAt?: (date: string) => string;
+  /** Stacked beside the chart (default) or in a row above a miniature one. */
+  direction?: 'column' | 'row';
 }
 
 /**
@@ -24,11 +26,17 @@ export default function StockSummaryCards({
   performance,
   currency,
   formatOccurredAt = formatPointLabel,
+  direction = 'column',
 }: StockSummaryCardsProps) {
   const positive = performance.changePercent >= 0;
 
   return (
-    <Stack spacing={1} sx={{ height: '100%' }} data-testid="summary-tiles">
+    <Stack
+      direction={direction}
+      spacing={1}
+      sx={{ height: direction === 'column' ? '100%' : undefined }}
+      data-testid="summary-tiles"
+    >
       <Tile
         label="Latest Price"
         testId="summary-price"

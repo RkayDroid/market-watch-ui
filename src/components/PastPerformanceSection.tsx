@@ -1,16 +1,12 @@
-import { Box, Button, CircularProgress, Divider, Paper } from '@mui/material';
-import DownloadIcon from '@mui/icons-material/Download';
+import { Box, Divider, Paper } from '@mui/material';
 import type { LookupError } from '../errors/lookupError.ts';
 import { performancePeriodLabel, type PerformancePeriod } from '../types/performance.ts';
 import type { PastPerformance, StockDetails } from '../types/stock.ts';
-import { validateReferenceDate } from '../utils/date.ts';
 import { describeInterval } from '../utils/format.ts';
 import { LAYOUT } from '../layout.ts';
-import { DARK_TOOLBAR_SX } from './darkToolbar.ts';
 import ErrorBanner from './ErrorBanner.tsx';
 import LoadingIndicator from './LoadingIndicator.tsx';
-import PeriodSelector from './PeriodSelector.tsx';
-import ReferenceDatePicker from './ReferenceDatePicker.tsx';
+import PerformanceToolbar from './PerformanceToolbar.tsx';
 import PriceChart from './PriceChart.tsx';
 import HourlyPriceTable from './HourlyPriceTable.tsx';
 import StockSummaryCards from './StockSummaryCards.tsx';
@@ -58,7 +54,6 @@ export default function PastPerformanceSection({
   pendingPeriod,
   error,
 }: PastPerformanceSectionProps) {
-  const referenceDateError = validateReferenceDate(referenceDate, maxReferenceDate);
   const loadedLabel = performance ? `Past ${performancePeriodLabel(performance.period)}` : '';
   // The date the served window really ends on — for the offline source this can differ from the pick.
   const chartTitle = `Price Trend — ${loadedLabel}${performance?.referenceDate ? ` to ${performance.referenceDate}` : ''}`;
@@ -73,38 +68,15 @@ export default function PastPerformanceSection({
       data-testid="past-performance"
       sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      <Box data-testid="past-performance-toolbar" sx={DARK_TOOLBAR_SX}>
-        <ReferenceDatePicker
-          value={referenceDate}
-          onChange={onReferenceDateChange}
-          max={maxReferenceDate}
-          error={referenceDateError}
-          disabled={loading}
-          contrast
-        />
-        <PeriodSelector value={period} onChange={onPeriodChange} disabled={loading} contrast />
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={loading ? undefined : <DownloadIcon />}
-          disabled={loading || referenceDateError !== null}
-          onClick={onFetch}
-          aria-label="Performance"
-          sx={{
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-            minWidth: 132,
-            fontWeight: 700,
-            bgcolor: 'common.white',
-            color: 'grey.900',
-            '&:hover': { bgcolor: 'grey.200' },
-            '&.Mui-disabled': { bgcolor: 'grey.700', color: 'grey.400' },
-          }}
-          data-testid="fetch-performance"
-        >
-          {loading ? <CircularProgress size={18} color="inherit" /> : 'Performance'}
-        </Button>
-      </Box>
+      <PerformanceToolbar
+        referenceDate={referenceDate}
+        onReferenceDateChange={onReferenceDateChange}
+        maxReferenceDate={maxReferenceDate}
+        period={period}
+        onPeriodChange={onPeriodChange}
+        onAction={onFetch}
+        loading={loading}
+      />
 
       {error && (
         <>

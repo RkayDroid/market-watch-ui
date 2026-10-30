@@ -10,15 +10,19 @@ export interface LiveApiConfig {
   baseUrl: string;
   apiKey?: string;
   timeoutMs: number;
+  /** User the watchlist API stores lists for (`POST /watchlist` → `userId`). */
+  userId: string;
 }
 
 /** Placeholder until the real endpoint is known. Override with VITE_LIVE_API_BASE_URL. */
 export const DEFAULT_LIVE_API_BASE_URL = 'https://api.market-watch.example/v1';
 export const DEFAULT_LIVE_API_TIMEOUT_MS = 10_000;
+/** Placeholder until sign-in exists. Override with VITE_USER_ID. */
+export const DEFAULT_LIVE_API_USER_ID = 'anonymous';
 
 export type LiveApiEnv = Pick<
   ImportMetaEnv,
-  'VITE_LIVE_API_BASE_URL' | 'VITE_LIVE_API_KEY' | 'VITE_LIVE_API_TIMEOUT_MS'
+  'VITE_LIVE_API_BASE_URL' | 'VITE_LIVE_API_KEY' | 'VITE_LIVE_API_TIMEOUT_MS' | 'VITE_USER_ID'
 >;
 
 function parseTimeout(raw: string | undefined): number {
@@ -38,5 +42,6 @@ export function getLiveApiConfig(env: LiveApiEnv = import.meta.env): LiveApiConf
     baseUrl: blankToUndefined(env.VITE_LIVE_API_BASE_URL) ?? DEFAULT_LIVE_API_BASE_URL,
     apiKey: blankToUndefined(env.VITE_LIVE_API_KEY),
     timeoutMs: parseTimeout(env.VITE_LIVE_API_TIMEOUT_MS),
+    userId: blankToUndefined(env.VITE_USER_ID) ?? DEFAULT_LIVE_API_USER_ID,
   };
 }

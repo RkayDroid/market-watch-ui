@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Box, Paper, Typography, useTheme } from '@mui/material';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import { computePriceChartLayout, type ChartPoint, type PriceChartLayout } from '../charts/priceChartLayout.ts';
@@ -86,6 +86,8 @@ export default function PriceChart({
   currency,
   embedded = false,
 }: PriceChartProps) {
+  // Gradient ids are document-global; several charts on one page (the comparison) must not share one.
+  const gradientId = `${useId()}-area`;
   const theme = useTheme();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [containerRef, measuredWidth] = useElementWidth<HTMLDivElement>(DEFAULT_CHART_WIDTH);
@@ -145,7 +147,7 @@ export default function PriceChart({
               onMouseLeave={() => setActiveIndex(null)}
             >
               <defs>
-                <linearGradient id="price-chart-area" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
                   <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                 </linearGradient>
@@ -181,7 +183,7 @@ export default function PriceChart({
               <line x1={plot.left} x2={plot.left} y1={plot.top} y2={plot.bottom} stroke={gridColor} />
 
               {/* Series */}
-              <path d={layout.areaPath} fill="url(#price-chart-area)" data-testid="price-area" />
+              <path d={layout.areaPath} fill={`url(#${gradientId})`} data-testid="price-area" />
               <path
                 d={layout.linePath}
                 fill="none"

@@ -22,12 +22,13 @@ afterEach(() => vi.restoreAllMocks());
 describe('App (default service wiring)', () => {
   it('fetches public/data/detail-*.json over HTTP for the local source', async () => {
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
-      if (url === '/data/detail-GOOG.json') return { data: detailGoog, headers: { 'content-type': 'application/json' } };
+      if (url === '/data/detail-GOOG.json')
+        return { data: detailGoog, headers: { 'content-type': 'application/json' } };
       throw new Error(`unexpected request: ${url}`);
     });
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
-    await userEvent.click(screen.getByLabelText(/local json/i));
+    await userEvent.click(screen.getByRole('switch', { name: /offline mode/i }));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'goog{enter}');
 
     expect(await screen.findByTestId('summary-symbol')).toHaveTextContent('GOOG');
@@ -42,7 +43,7 @@ describe('App (default service wiring)', () => {
     );
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
-    await userEvent.click(screen.getByLabelText(/local json/i));
+    await userEvent.click(screen.getByRole('switch', { name: /offline mode/i }));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'msft{enter}');
 
     const alert = await screen.findByRole('alert');
@@ -69,7 +70,7 @@ describe('App (default service wiring)', () => {
     });
     render(<App lookupOptions={{ minLoadingMs: 0 }} />);
 
-    // "Live API" is the default source; nothing offline is touched.
+    // Online is the default; nothing offline is touched.
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'AAPL{enter}');
     await screen.findByTestId('summary-symbol');
     await userEvent.click(screen.getByRole('radio', { name: 'Month' }));

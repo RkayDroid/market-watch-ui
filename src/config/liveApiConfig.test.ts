@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LIVE_API_BASE_URL,
   DEFAULT_LIVE_API_TIMEOUT_MS,
+  DEFAULT_LIVE_API_USER_ID,
   getLiveApiConfig,
 } from './liveApiConfig.ts';
 
@@ -11,6 +12,7 @@ describe('getLiveApiConfig', () => {
       baseUrl: DEFAULT_LIVE_API_BASE_URL,
       apiKey: undefined,
       timeoutMs: DEFAULT_LIVE_API_TIMEOUT_MS,
+      userId: DEFAULT_LIVE_API_USER_ID,
     });
   });
 
@@ -20,8 +22,9 @@ describe('getLiveApiConfig', () => {
         VITE_LIVE_API_BASE_URL: ' https://real.api/v2 ',
         VITE_LIVE_API_KEY: 'secret',
         VITE_LIVE_API_TIMEOUT_MS: '2500',
+        VITE_USER_ID: ' alice ',
       }),
-    ).toEqual({ baseUrl: 'https://real.api/v2', apiKey: 'secret', timeoutMs: 2500 });
+    ).toEqual({ baseUrl: 'https://real.api/v2', apiKey: 'secret', timeoutMs: 2500, userId: 'alice' });
   });
 
   it.each(['', '   ', 'abc', '-5', '0'])('ignores invalid timeout %j', (raw) => {
@@ -32,5 +35,6 @@ describe('getLiveApiConfig', () => {
     const cfg = getLiveApiConfig({ VITE_LIVE_API_BASE_URL: '  ', VITE_LIVE_API_KEY: '' });
     expect(cfg.baseUrl).toBe(DEFAULT_LIVE_API_BASE_URL);
     expect(cfg.apiKey).toBeUndefined();
+    expect(getLiveApiConfig({ VITE_USER_ID: ' ' }).userId).toBe(DEFAULT_LIVE_API_USER_ID);
   });
 });

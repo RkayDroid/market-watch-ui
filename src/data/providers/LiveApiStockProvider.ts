@@ -102,7 +102,7 @@ export interface LiveApiProviderOptions {
  * Configure the base URL (and key) via `.env`; see `.env.example`.
  */
 export function createLiveApiStockProvider(
-  config: LiveApiConfig,
+  config: Omit<LiveApiConfig, 'userId'>,
   options: LiveApiProviderOptions = {},
 ): StockProvider {
   const { client = axios } = options;

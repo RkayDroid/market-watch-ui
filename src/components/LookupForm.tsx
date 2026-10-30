@@ -1,44 +1,24 @@
 import type { FormEvent } from 'react';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  FormControl,
-  FormControlLabel,
-  FormLabel,
-  Paper,
-  Radio,
-  RadioGroup,
-  TextField,
-} from '@mui/material';
+import { Box, Button, CircularProgress, Paper, TextField } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { isDataSource, type DataSource } from '../types/stock.ts';
 import { LAYOUT } from '../layout.ts';
 
 export interface LookupFormProps {
   symbol: string;
-  source: DataSource;
   loading: boolean;
   onSymbolChange: (symbol: string) => void;
-  onSourceChange: (source: DataSource) => void;
-  onSubmit: (symbol: string, source: DataSource) => void;
+  /** Submits the typed symbol; the data source is the app-wide setting (see `SourceToggle`). */
+  onSubmit: (symbol: string) => void;
 }
 
-/** Controlled lookup form: the parent owns the symbol/source so it can pre-fill them. */
-export default function LookupForm({
-  symbol,
-  source,
-  loading,
-  onSymbolChange,
-  onSourceChange,
-  onSubmit,
-}: LookupFormProps) {
+/** Controlled lookup form: the parent owns the symbol so it can pre-fill it. */
+export default function LookupForm({ symbol, loading, onSymbolChange, onSubmit }: LookupFormProps) {
   const canSubmit = symbol.trim().length > 0 && !loading;
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit(symbol, source);
+    onSubmit(symbol);
   };
 
   return (
@@ -74,38 +54,6 @@ export default function LookupForm({
         >
           {loading ? <CircularProgress size={20} color="inherit" /> : 'Find'}
         </Button>
-
-        <FormControl
-          component="fieldset"
-          sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1, ml: { md: 2 } }}
-        >
-          <FormLabel component="legend" sx={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-            Source:
-          </FormLabel>
-          <RadioGroup
-            row
-            value={source}
-            onChange={(e) => {
-              if (isDataSource(e.target.value)) onSourceChange(e.target.value);
-            }}
-            sx={{ flexWrap: 'nowrap' }}
-          >
-            <FormControlLabel
-              value="api"
-              control={<Radio size="small" sx={{ py: 0.5 }} />}
-              label="Live API"
-              slotProps={{ typography: { variant: 'caption' } }}
-              sx={{ mr: 1.5 }}
-            />
-            <FormControlLabel
-              value="local"
-              control={<Radio size="small" sx={{ py: 0.5 }} />}
-              label="Local JSON (offline)"
-              slotProps={{ typography: { variant: 'caption' } }}
-              sx={{ mr: 0 }}
-            />
-          </RadioGroup>
-        </FormControl>
       </Box>
     </Paper>
   );

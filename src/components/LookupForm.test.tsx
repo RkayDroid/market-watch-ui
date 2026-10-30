@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { DataSource } from '../types/stock.ts';
 import LookupForm, { type LookupFormProps } from './LookupForm.tsx';
 
 type HarnessProps = Partial<Pick<LookupFormProps, 'loading' | 'onSubmit'>> & { initialSymbol?: string };
@@ -10,38 +9,27 @@ type HarnessProps = Partial<Pick<LookupFormProps, 'loading' | 'onSubmit'>> & { i
 /** Owns the controlled state the way App does. */
 function Harness({ loading = false, onSubmit = vi.fn(), initialSymbol = '' }: HarnessProps) {
   const [symbol, setSymbol] = useState(initialSymbol);
-  const [source, setSource] = useState<DataSource>('api');
-  return (
-    <LookupForm
-      symbol={symbol}
-      source={source}
-      loading={loading}
-      onSymbolChange={setSymbol}
-      onSourceChange={setSource}
-      onSubmit={onSubmit}
-    />
-  );
+  return <LookupForm symbol={symbol} loading={loading} onSymbolChange={setSymbol} onSubmit={onSubmit} />;
 }
 
 describe('LookupForm', () => {
-  it('submits the symbol with the default (api) source', async () => {
+  it('submits the typed symbol on click', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'aapl');
     await userEvent.click(screen.getByRole('button', { name: /find/i }));
 
-    expect(onSubmit).toHaveBeenCalledWith('aapl', 'api');
+    expect(onSubmit).toHaveBeenCalledWith('aapl');
   });
 
-  it('submits with the local source when selected', async () => {
+  it('submits on Enter', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
 
-    await userEvent.click(screen.getByLabelText(/local json/i));
     await userEvent.type(screen.getByLabelText(/stock symbol/i), 'META{enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith('META', 'local');
+    expect(onSubmit).toHaveBeenCalledWith('META');
   });
 
   it('does not submit a blank symbol', async () => {
@@ -53,14 +41,14 @@ describe('LookupForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('keeps input, button and source selector as direct siblings in one row', () => {
+  it('is just the input and the button, side by side (the data source is chosen in the header)', () => {
     render(<Harness />);
     const form = screen.getByTestId('lookup-form');
     const children = Array.from(form.children);
-    expect(children).toHaveLength(3);
+    expect(children).toHaveLength(2);
     expect(children[0]).toContainElement(screen.getByLabelText(/stock symbol/i));
     expect(children[1]).toBe(screen.getByRole('button', { name: /find/i }));
-    expect(children[2]).toContainElement(screen.getByLabelText(/live api/i));
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('keeps Find disabled until a non-blank symbol is typed', async () => {

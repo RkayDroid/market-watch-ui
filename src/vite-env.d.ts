@@ -7,4 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_LIVE_API_KEY?: string;
   /** Request timeout in milliseconds. */
   readonly VITE_LIVE_API_TIMEOUT_MS?: string;
+  /** User id sent to the watchlist API (`POST /watchlist`). */
+  readonly VITE_USER_ID?: string;
 }
